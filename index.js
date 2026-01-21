@@ -1,20 +1,21 @@
 /**
- * 💱 EXCHANGE MINI APP - Telegram Bot
- * Полнофункциональный обменник валют с Mini App
- * 
- * @author Your Name
- * @version 1.0.0
+ * ╔═══════════════════════════════════════════════════════════════╗
+ * ║   💱 EXCHANGE MINI APP - P2P Обменник для Telegram           ║
+ * ║   🚀 v2.0.0 - Bothost Edition (Node.js + SQLite)             ║
+ * ╚═══════════════════════════════════════════════════════════════╝
  */
 
-import express from 'express';
 import { Telegraf, Markup } from 'telegraf';
-import { Server } from 'socket.io';
+import express from 'express';
 import { createServer } from 'http';
-import mongoose from 'mongoose';
+import { Server } from 'socket.io';
+import Database from 'better-sqlite3';
 import cors from 'cors';
 import crypto from 'crypto';
+import { config } from 'dotenv';
 import cron from 'node-cron';
-import config from './config.js';
+
+config();
 
 // ============================================
 // 🎨 КРАСИВОЕ ПРИВЕТСТВИЕ
@@ -31,13 +32,15 @@ console.log('\x1b[36m%s\x1b[0m', `
 ║   ███████╗██╔╝ ██╗╚██████╗██║  ██║██║  ██║██║ ╚████║╚██████╔╝║
 ║   ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ║
 ║                                                               ║
-║              🚀 TELEGRAM MINI APP BOT v1.0.0 🚀               ║
+║              🚀 TELEGRAM MINI APP BOT v2.0.0 🚀               ║
+║                      💎 Bothost Edition 💎                    ║
 ║                                                               ║
-║   💱 Обменник валют с полным функционалом                     ║
-║   🔐 Безопасные сделки P2P                                    ║
+║   💱 P2P обменник валют                                       ║
+║   🔐 Безопасные сделки                                        ║
 ║   💬 Встроенный чат                                           ║
 ║   📊 Аналитика и статистика                                   ║
 ║   ⭐ Рейтинговая система                                       ║
+║   🗄️  SQLite база данных                                      ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 `);
@@ -45,161 +48,157 @@ console.log('\x1b[36m%s\x1b[0m', `
 console.log('\x1b[33m%s\x1b[0m', '📋 Инициализация системы...\n');
 
 // ============================================
-// 🗄️ MONGOOSE SCHEMAS
+// ⚙️ КОНФИГУРАЦИЯ
 // ============================================
 
-const { Schema, model } = mongoose;
-
-// Схема пользователя
-const userSchema = new Schema({
-  telegramId: { type: Number, required: true, unique: true, index: true },
-  username: String,
-  firstName: String,
-  lastName: String,
-  photoUrl: String,
-  subscription: {
-    type: { type: String, enum: ['free', 'pro'], default: 'free' },
-    expiresAt: Date,
-    autoRenew: { type: Boolean, default: false }
+const CONFIG = {
+  BOT_TOKEN: process.env.BOT_TOKEN || '',
+  WEBAPP_URL: process.env.WEBAPP_URL || 'https://your-app.vercel.app',
+  PORT: parseInt(process.env.PORT) || 8888,
+  HOST: '0.0.0.0',
+  
+  SUBSCRIPTION: {
+    FREE: { dailyDeals: 3, price: 0 },
+    PRO: { dailyDeals: Infinity, price: 500, days: 30 }
   },
-  rating: { type: Number, default: 0, index: true },
-  completedDeals: { type: Number, default: 0 },
-  cancelledDeals: { type: Number, default: 0 },
-  dailyDealsCount: { type: Number, default: 0 },
-  lastDealDate: Date,
-  balance: { type: Number, default: 0 },
-  verified: { type: Boolean, default: false },
-  blocked: { type: Boolean, default: false },
-  notifications: {
-    newDeals: { type: Boolean, default: true },
-    messages: { type: Boolean, default: true },
-    promotions: { type: Boolean, default: true }
+  
+  PROMOTION: {
+    top: { price: 100, hours: 24 },
+    highlight: { price: 50 },
+    pin: { price: 150, hours: 24 }
   },
-  referralCode: { type: String, unique: true, sparse: true },
-  referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
-  language: { type: String, default: 'ru' },
-  createdAt: { type: Date, default: Date.now },
-  lastActive: { type: Date, default: Date.now }
-}, { timestamps: true });
+  
+  CURRENCIES: ['BTC', 'ETH', 'USDT', 'TON', 'BNB', 'USD', 'EUR', 'RUB']
+};
 
-// Схема сделки
-const dealSchema = new Schema({
-  creator: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  type: { type: String, enum: ['buy', 'sell'], required: true, index: true },
-  currencyFrom: { type: String, required: true, index: true },
-  currencyTo: { type: String, required: true, index: true },
-  amountFrom: { type: Number, required: true, min: 0 },
-  amountTo: { type: Number, required: true, min: 0 },
-  rate: { type: Number, required: true, min: 0 },
-  minAmount: { type: Number, default: 0 },
-  maxAmount: { type: Number },
-  paymentMethod: [String],
-  description: String,
-  location: String,
-  timeLimit: { type: Number, default: 30 }, // минуты
-  status: { 
-    type: String, 
-    enum: ['active', 'in_progress', 'completed', 'cancelled', 'disputed'],
-    default: 'active',
-    index: true
-  },
-  participant: { type: Schema.Types.ObjectId, ref: 'User', index: true },
-  promoted: {
-    topUntil: { type: Date, index: true },
-    highlighted: { type: Boolean, default: false },
-    pinned: { type: Boolean, default: false }
-  },
-  views: { type: Number, default: 0 },
-  favorites: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  startedAt: Date,
-  completedAt: Date,
-  cancelledAt: Date,
-  cancelReason: String,
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+// ============================================
+// 🗄️ SQLITE DATABASE
+// ============================================
 
-// Схема сообщения
-const messageSchema = new Schema({
-  deal: { type: Schema.Types.ObjectId, ref: 'Deal', required: true, index: true },
-  sender: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  text: String,
-  image: String,
-  type: { type: String, enum: ['text', 'image', 'system'], default: 'text' },
-  read: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+console.log('\x1b[33m%s\x1b[0m', '🗄️  Инициализация SQLite базы данных...');
 
-// Схема новостей
-const newsSchema = new Schema({
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  image: String,
-  category: { type: String, enum: ['update', 'promo', 'info', 'warning'], default: 'info' },
-  important: { type: Boolean, default: false },
-  published: { type: Boolean, default: true },
-  views: { type: Number, default: 0 },
-  likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+const db = new Database('exchange.db');
+db.pragma('journal_mode = WAL');
 
-// Схема курсов валют
-const rateSchema = new Schema({
-  pair: { type: String, required: true, unique: true },
-  rate: { type: Number, required: true },
-  change24h: { type: Number, default: 0 },
-  volume24h: { type: Number, default: 0 },
-  high24h: { type: Number },
-  low24h: { type: Number },
-  source: { type: String, default: 'manual' },
-  updatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+// Создание таблиц
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER UNIQUE NOT NULL,
+    username TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    subscription_type TEXT DEFAULT 'free',
+    subscription_expires INTEGER,
+    rating INTEGER DEFAULT 0,
+    completed_deals INTEGER DEFAULT 0,
+    cancelled_deals INTEGER DEFAULT 0,
+    daily_deals_count INTEGER DEFAULT 0,
+    last_deal_date INTEGER,
+    balance REAL DEFAULT 0,
+    verified INTEGER DEFAULT 0,
+    blocked INTEGER DEFAULT 0,
+    referral_code TEXT UNIQUE,
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
 
-// Схема транзакций
-const transactionSchema = new Schema({
-  user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  type: { 
-    type: String, 
-    enum: ['promotion', 'subscription', 'donation', 'refund', 'bonus', 'withdrawal'],
-    required: true,
-    index: true
-  },
-  amount: { type: Number, required: true },
-  description: String,
-  status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' },
-  metadata: Schema.Types.Mixed,
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+  CREATE TABLE IF NOT EXISTS deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    creator_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    currency_from TEXT NOT NULL,
+    currency_to TEXT NOT NULL,
+    amount_from REAL NOT NULL,
+    amount_to REAL NOT NULL,
+    rate REAL NOT NULL,
+    payment_method TEXT,
+    description TEXT,
+    status TEXT DEFAULT 'active',
+    participant_id INTEGER,
+    promoted_top_until INTEGER,
+    promoted_highlighted INTEGER DEFAULT 0,
+    promoted_pinned INTEGER DEFAULT 0,
+    views INTEGER DEFAULT 0,
+    started_at INTEGER,
+    completed_at INTEGER,
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (creator_id) REFERENCES users(id),
+    FOREIGN KEY (participant_id) REFERENCES users(id)
+  );
 
-// Схема отзывов
-const reviewSchema = new Schema({
-  deal: { type: Schema.Types.ObjectId, ref: 'Deal', required: true },
-  from: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  to: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  rating: { type: Number, required: true, min: 1, max: 5 },
-  comment: String,
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL,
+    sender_id INTEGER NOT NULL,
+    text TEXT,
+    type TEXT DEFAULT 'text',
+    read INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (deal_id) REFERENCES deals(id),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+  );
 
-// Создание моделей
-const User = model('User', userSchema);
-const Deal = model('Deal', dealSchema);
-const Message = model('Message', messageSchema);
-const News = model('News', newsSchema);
-const Rate = model('Rate', rateSchema);
-const Transaction = model('Transaction', transactionSchema);
-const Review = model('Review', reviewSchema);
+  CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    image TEXT,
+    category TEXT DEFAULT 'info',
+    important INTEGER DEFAULT 0,
+    published INTEGER DEFAULT 1,
+    views INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pair TEXT UNIQUE NOT NULL,
+    rate REAL NOT NULL,
+    change24h REAL DEFAULT 0,
+    updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'completed',
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
+  CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
+  CREATE INDEX IF NOT EXISTS idx_deals_creator ON deals(creator_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_deal ON messages(deal_id);
+`);
+
+console.log('\x1b[32m%s\x1b[0m', '✅ База данных инициализирована!\n');
+
+// Создание начальных курсов
+const ratesCount = db.prepare('SELECT COUNT(*) as count FROM rates').get();
+if (ratesCount.count === 0) {
+  console.log('\x1b[33m%s\x1b[0m', '📊 Создание начальных курсов...');
+  const insertRate = db.prepare('INSERT INTO rates (pair, rate, change24h) VALUES (?, ?, ?)');
+  insertRate.run('BTC/USDT', 43500, 2.5);
+  insertRate.run('ETH/USDT', 2250, 1.8);
+  insertRate.run('TON/USDT', 2.35, -0.5);
+  insertRate.run('BNB/USDT', 310, 3.2);
+  insertRate.run('USD/RUB', 92.5, 0.1);
+  insertRate.run('EUR/RUB', 101.2, -0.3);
+  console.log('\x1b[32m%s\x1b[0m', '✅ Курсы созданы!\n');
+}
 
 // ============================================
 // 🔧 UTILITY FUNCTIONS
 // ============================================
 
-// Генерация реферального кода
 function generateReferralCode() {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// Проверка Telegram Web App данных
 function verifyTelegramWebAppData(initData) {
   try {
     const urlParams = new URLSearchParams(initData);
@@ -213,7 +212,7 @@ function verifyTelegramWebAppData(initData) {
     
     const secretKey = crypto
       .createHmac('sha256', 'WebAppData')
-      .update(config.BOT_TOKEN)
+      .update(CONFIG.BOT_TOKEN)
       .digest();
     
     const calculatedHash = crypto
@@ -232,296 +231,69 @@ function verifyTelegramWebAppData(initData) {
   }
 }
 
-// Проверка возможности создания сделки
-async function canCreateDeal(user) {
-  // PRO - безлимит
-  if (user.subscription.type === 'pro' && 
-      user.subscription.expiresAt > new Date()) {
+function getOrCreateUser(telegramId, userData = {}) {
+  let user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
+  
+  if (!user) {
+    const insert = db.prepare(`
+      INSERT INTO users (telegram_id, username, first_name, last_name, referral_code)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    const result = insert.run(
+      telegramId,
+      userData.username || null,
+      userData.first_name || null,
+      userData.last_name || null,
+      generateReferralCode()
+    );
+    
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+  }
+  
+  return user;
+}
+
+function canCreateDeal(user) {
+  const now = Math.floor(Date.now() / 1000);
+  const isPro = user.subscription_type === 'pro' && user.subscription_expires > now;
+  
+  if (isPro) {
     return { allowed: true };
   }
   
   // FREE - 3 сделки в день
-  const today = new Date().setHours(0, 0, 0, 0);
-  const lastDealDate = user.lastDealDate ? 
-    new Date(user.lastDealDate).setHours(0, 0, 0, 0) : null;
+  const today = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+  const lastDealDate = user.last_deal_date || 0;
+  const lastDealDay = Math.floor(new Date(lastDealDate * 1000).setHours(0, 0, 0, 0) / 1000);
   
-  if (lastDealDate !== today) {
+  if (lastDealDay !== today) {
     return { allowed: true };
   }
   
-  if (user.dailyDealsCount >= config.SUBSCRIPTION.FREE.dailyDeals) {
-    return { 
-      allowed: false, 
-      message: `Достигнут дневной лимит (${config.SUBSCRIPTION.FREE.dailyDeals} сделки). Обновите подписку до PRO для безлимита!` 
+  if (user.daily_deals_count >= CONFIG.SUBSCRIPTION.FREE.dailyDeals) {
+    return {
+      allowed: false,
+      message: `Достигнут лимит (${CONFIG.SUBSCRIPTION.FREE.dailyDeals} сделки/день). Обновите до PRO!`
     };
   }
   
   return { allowed: true };
 }
 
-// Форматирование числа
 function formatNumber(num) {
   return new Intl.NumberFormat('ru-RU').format(num);
 }
 
-// Форматирование даты
-function formatDate(date) {
+function formatDate(timestamp) {
   return new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  }).format(new Date(date));
+  }).format(new Date(timestamp * 1000));
 }
-
-// ============================================
-// 🤖 TELEGRAM BOT
-// ============================================
-
-const bot = new Telegraf(config.BOT_TOKEN);
-
-// Команда /start
-bot.command('start', async (ctx) => {
-  const userId = ctx.from.id;
-  
-  try {
-    let user = await User.findOne({ telegramId: userId });
-    
-    // Обработка реферальной ссылки
-    const startParam = ctx.message.text.split(' ')[1];
-    
-    if (!user) {
-      user = await User.create({
-        telegramId: userId,
-        username: ctx.from.username,
-        firstName: ctx.from.first_name,
-        lastName: ctx.from.last_name,
-        referralCode: generateReferralCode(),
-        referredBy: startParam ? await User.findOne({ referralCode: startParam }) : null
-      });
-      
-      // Бонус за регистрацию по реферальной ссылке
-      if (startParam) {
-        const referrer = await User.findOne({ referralCode: startParam });
-        if (referrer) {
-          referrer.balance += 50;
-          await referrer.save();
-          
-          await Transaction.create({
-            user: referrer._id,
-            type: 'bonus',
-            amount: 50,
-            description: 'Бонус за приглашение друга'
-          });
-        }
-      }
-    }
-    
-    const welcomeMessage = `
-🎉 <b>Добро пожаловать в Exchange Mini App!</b>
-
-💱 Самый удобный P2P обменник в Telegram!
-
-<b>Что вы можете делать:</b>
-🔹 Создавать объявления о покупке/продаже
-🔹 Находить выгодные предложения
-🔹 Безопасно обмениваться через встроенный чат
-🔹 Отслеживать актуальные курсы валют
-🔹 Зарабатывать репутацию и рейтинг
-
-<b>Ваш тариф:</b> ${user.subscription.type === 'pro' ? '👑 PRO' : '🆓 FREE'}
-${user.subscription.type === 'free' ? `Лимит: ${config.SUBSCRIPTION.FREE.dailyDeals} сделки/день` : '♾️ Безлимит сделок'}
-
-<b>Ваш рейтинг:</b> ⭐ ${user.rating}
-<b>Завершено сделок:</b> ✅ ${user.completedDeals}
-${user.verified ? '\n✓ <b>Верифицированный пользователь</b>' : ''}
-
-👇 <b>Нажмите кнопку ниже, чтобы начать!</b>
-    `;
-    
-    await ctx.replyWithHTML(
-      welcomeMessage,
-      Markup.keyboard([
-        [Markup.button.webApp('🚀 Открыть Exchange App', config.WEBAPP_URL)],
-        ['📊 Статистика', '👤 Профиль'],
-        ['💎 Подписка PRO', '❓ Помощь']
-      ]).resize()
-    );
-    
-  } catch (error) {
-    console.error('Ошибка /start:', error);
-    await ctx.reply('Произошла ошибка. Попробуйте позже.');
-  }
-});
-
-// Команда /help
-bot.command('help', async (ctx) => {
-  const helpText = `
-📖 <b>СПРАВКА</b>
-
-<b>Основные команды:</b>
-/start - Запустить бота
-/profile - Мой профиль
-/stats - Статистика
-/subscription - Управление подпиской
-/support - Связаться с поддержкой
-/news - Последние новости
-
-<b>Как создать сделку:</b>
-1. Откройте приложение
-2. Нажмите "Создать сделку"
-3. Укажите валюты и сумму
-4. Дождитесь отклика
-
-<b>Тарифы:</b>
-🆓 FREE - 3 сделки в день
-👑 PRO - Безлимит + приоритет
-
-<b>Безопасность:</b>
-• Проверяйте рейтинг продавца
-• Используйте встроенный чат
-• Подтверждайте сделки только после получения
-
-<b>Поддержка:</b> @support
-<b>Новости:</b> @exchange_news
-  `;
-  
-  await ctx.replyWithHTML(helpText);
-});
-
-// Команда /profile
-bot.hears('👤 Профиль', async (ctx) => {
-  const user = await User.findOne({ telegramId: ctx.from.id });
-  
-  if (!user) {
-    return ctx.reply('Пользователь не найден. Отправьте /start');
-  }
-  
-  const profileText = `
-👤 <b>ВАШ ПРОФИЛЬ</b>
-
-<b>Имя:</b> ${user.firstName} ${user.lastName || ''}
-<b>Username:</b> @${user.username || 'не указан'}
-${user.verified ? '✅ <b>Верифицирован</b>' : ''}
-
-<b>Тариф:</b> ${user.subscription.type === 'pro' ? '👑 PRO' : '🆓 FREE'}
-${user.subscription.type === 'pro' ? `<b>Действует до:</b> ${formatDate(user.subscription.expiresAt)}` : ''}
-
-<b>Рейтинг:</b> ⭐ ${user.rating}
-<b>Завершено сделок:</b> ✅ ${user.completedDeals}
-<b>Отменено сделок:</b> ❌ ${user.cancelledDeals}
-
-<b>Баланс:</b> 💰 ${formatNumber(user.balance)} ₽
-
-<b>Реферальный код:</b> <code>${user.referralCode}</code>
-Приглашайте друзей и получайте бонусы!
-  `;
-  
-  await ctx.replyWithHTML(profileText);
-});
-
-// Команда /stats
-bot.hears('📊 Статистика', async (ctx) => {
-  const user = await User.findOne({ telegramId: ctx.from.id });
-  
-  if (!user) {
-    return ctx.reply('Пользователь не найден. Отправьте /start');
-  }
-  
-  const myDeals = await Deal.countDocuments({
-    $or: [{ creator: user._id }, { participant: user._id }]
-  });
-  
-  const activeDeals = await Deal.countDocuments({
-    $or: [{ creator: user._id }, { participant: user._id }],
-    status: { $in: ['active', 'in_progress'] }
-  });
-  
-  const totalDeals = await Deal.countDocuments();
-  const totalUsers = await User.countDocuments();
-  
-  const statsText = `
-📊 <b>СТАТИСТИКА</b>
-
-<b>Ваши показатели:</b>
-📝 Всего сделок: ${myDeals}
-🟢 Активных: ${activeDeals}
-✅ Завершено: ${user.completedDeals}
-❌ Отменено: ${user.cancelledDeals}
-⭐ Рейтинг: ${user.rating}
-${user.subscription.type === 'free' ? `📅 Сегодня создано: ${user.dailyDealsCount}/3` : ''}
-
-<b>Общая статистика:</b>
-👥 Пользователей: ${formatNumber(totalUsers)}
-💱 Сделок: ${formatNumber(totalDeals)}
-  `;
-  
-  await ctx.replyWithHTML(statsText);
-});
-
-// Команда подписки
-bot.hears('💎 Подписка PRO', async (ctx) => {
-  const user = await User.findOne({ telegramId: ctx.from.id });
-  
-  const isPro = user.subscription.type === 'pro' && 
-                user.subscription.expiresAt > new Date();
-  
-  const proText = `
-💎 <b>ПОДПИСКА PRO</b>
-
-${isPro ? '✅ У вас активна PRO подписка!' : '🆓 У вас FREE тариф'}
-
-<b>Преимущества PRO:</b>
-♾️ Безлимитное количество сделок
-🚀 Приоритет в списке объявлений
-⚡ Автоматический подбор объявлений
-⏱️ Ускоренное время обработки
-✓ Значок проверенного пользователя
-📊 Расширенная статистика
-📈 Приоритет в арбитраже
-🎯 Продвижение объявлений со скидкой
-
-<b>Стоимость:</b> ${config.SUBSCRIPTION.PRO.price} ₽/месяц
-
-${!isPro ? 'Откройте приложение для оформления подписки!' : `Действует до: ${formatDate(user.subscription.expiresAt)}`}
-  `;
-  
-  await ctx.replyWithHTML(
-    proText,
-    Markup.inlineKeyboard([
-      [Markup.button.webApp('💎 Оформить PRO', config.WEBAPP_URL + '/subscription')]
-    ])
-  );
-});
-
-// Помощь
-bot.hears('❓ Помощь', async (ctx) => {
-  await ctx.replyWithHTML(
-    `
-❓ <b>НУЖНА ПОМОЩЬ?</b>
-
-<b>Служба поддержки:</b>
-💬 Telegram: @exchange_support
-📧 Email: support@exchange.com
-
-<b>Часы работы:</b>
-Пн-Вс: 9:00 - 21:00 МСК
-
-<b>Среднее время ответа:</b> 2-5 минут
-    `,
-    Markup.inlineKeyboard([
-      [Markup.button.url('💬 Написать в поддержку', 'https://t.me/exchange_support')],
-      [Markup.button.url('📚 База знаний', 'https://exchange.com/help')]
-    ])
-  );
-});
-
-// Обработка ошибок бота
-bot.catch((err, ctx) => {
-  console.error('❌ Ошибка бота:', err);
-  ctx.reply('Произошла ошибка. Попробуйте позже или обратитесь в поддержку.');
-});
 
 // ============================================
 // 🌐 EXPRESS SERVER
@@ -537,24 +309,13 @@ app.use(cors());
 app.use(express.json());
 
 // Middleware авторизации
-const authMiddleware = async (req, res, next) => {
+const authMiddleware = (req, res, next) => {
   try {
     const initData = req.headers.authorization?.replace('Bearer ', '');
+    if (!initData) throw new Error('No auth data');
+    
     const userData = verifyTelegramWebAppData(initData);
-    
-    let user = await User.findOne({ telegramId: userData.id });
-    if (!user) {
-      user = await User.create({
-        telegramId: userData.id,
-        username: userData.username,
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        referralCode: generateReferralCode()
-      });
-    }
-    
-    user.lastActive = new Date();
-    await user.save();
+    const user = getOrCreateUser(userData.id, userData);
     
     req.user = user;
     next();
@@ -567,143 +328,138 @@ const authMiddleware = async (req, res, next) => {
 // 📡 API ROUTES
 // ============================================
 
-// Получить профиль
-app.get('/api/profile', authMiddleware, async (req, res) => {
+app.get('/', (req, res) => {
+  res.json({
+    app: 'Exchange Mini App Bot',
+    version: '2.0.0',
+    status: 'running',
+    platform: 'Bothost',
+    database: 'SQLite',
+    uptime: process.uptime()
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Профиль
+app.get('/api/profile', authMiddleware, (req, res) => {
   res.json(req.user);
 });
 
-// Обновить профиль
-app.put('/api/profile', authMiddleware, async (req, res) => {
-  const { notifications, language } = req.body;
+app.put('/api/profile', authMiddleware, (req, res) => {
+  const { language } = req.body;
   
-  if (notifications) req.user.notifications = notifications;
-  if (language) req.user.language = language;
+  if (language) {
+    db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, req.user.id);
+  }
   
-  await req.user.save();
-  res.json(req.user);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json(user);
 });
 
-// Получить список сделок
-app.get('/api/deals', authMiddleware, async (req, res) => {
-  try {
-    const { type, currencyFrom, currencyTo, minAmount, maxAmount, sort, page = 1, limit = 20 } = req.query;
-    
-    let query = { status: 'active' };
-    
-    if (type && type !== 'all') query.type = type;
-    if (currencyFrom) query.currencyFrom = currencyFrom;
-    if (currencyTo) query.currencyTo = currencyTo;
-    if (minAmount) query.amountFrom = { $gte: parseFloat(minAmount) };
-    if (maxAmount) query.amountFrom = { ...query.amountFrom, $lte: parseFloat(maxAmount) };
-    
-    // Сортировка с приоритетом для PRO
-    let sortObj = {};
-    
-    const isPro = req.user.subscription.type === 'pro' && 
-                  req.user.subscription.expiresAt > new Date();
-    
-    if (isPro) {
-      sortObj['promoted.pinned'] = -1;
-      sortObj['promoted.topUntil'] = -1;
-    }
-    
-    switch(sort) {
-      case 'rate_asc': sortObj.rate = 1; break;
-      case 'rate_desc': sortObj.rate = -1; break;
-      case 'amount_asc': sortObj.amountFrom = 1; break;
-      case 'amount_desc': sortObj.amountFrom = -1; break;
-      default: sortObj.createdAt = -1;
-    }
-    
-    const deals = await Deal.find(query)
-      .populate('creator', 'username firstName rating verified completedDeals')
-      .sort(sortObj)
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-    
-    const total = await Deal.countDocuments(query);
-    
-    res.json({
-      deals,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+// Получить сделки
+app.get('/api/deals', authMiddleware, (req, res) => {
+  const { type, currency_from, currency_to, page = 1, limit = 20 } = req.query;
+  
+  let query = 'SELECT d.*, u.username, u.first_name, u.rating, u.verified, u.completed_deals FROM deals d JOIN users u ON d.creator_id = u.id WHERE d.status = ?';
+  const params = ['active'];
+  
+  if (type && type !== 'all') {
+    query += ' AND d.type = ?';
+    params.push(type);
+  }
+  if (currency_from) {
+    query += ' AND d.currency_from = ?';
+    params.push(currency_from);
+  }
+  if (currency_to) {
+    query += ' AND d.currency_to = ?';
+    params.push(currency_to);
+  }
+  
+  // Сортировка
+  const isPro = req.user.subscription_type === 'pro' && 
+                req.user.subscription_expires > Math.floor(Date.now() / 1000);
+  
+  if (isPro) {
+    query += ' ORDER BY d.promoted_pinned DESC, d.promoted_top_until DESC, d.created_at DESC';
+  } else {
+    query += ' ORDER BY d.created_at DESC';
+  }
+  
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  query += ` LIMIT ? OFFSET ?`;
+  params.push(parseInt(limit), offset);
+  
+  const deals = db.prepare(query).all(...params);
+  
+  const countQuery = 'SELECT COUNT(*) as total FROM deals WHERE status = ?';
+  const { total } = db.prepare(countQuery).get('active');
+  
+  res.json({
+    deals: deals.map(d => ({
+      ...d,
+      creator: {
+        username: d.username,
+        first_name: d.first_name,
+        rating: d.rating,
+        verified: d.verified === 1,
+        completed_deals: d.completed_deals
       }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Получить сделку по ID
-app.get('/api/deals/:id', authMiddleware, async (req, res) => {
-  try {
-    const deal = await Deal.findById(req.params.id)
-      .populate('creator', 'username firstName rating verified completedDeals')
-      .populate('participant', 'username firstName rating verified completedDeals');
-    
-    if (!deal) {
-      return res.status(404).json({ error: 'Сделка не найдена' });
+    })),
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / limit)
     }
-    
-    // Увеличить счетчик просмотров
-    deal.views += 1;
-    await deal.save();
-    
-    res.json(deal);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  });
 });
 
 // Создать сделку
-app.post('/api/deals', authMiddleware, async (req, res) => {
+app.post('/api/deals', authMiddleware, (req, res) => {
   try {
-    const canCreate = await canCreateDeal(req.user);
-    
-    if (!canCreate.allowed) {
-      return res.status(403).json({ error: canCreate.message });
+    const can = canCreateDeal(req.user);
+    if (!can.allowed) {
+      return res.status(403).json({ error: can.message });
     }
     
-    const deal = await Deal.create({
-      ...req.body,
-      creator: req.user._id,
-      amountTo: req.body.amountFrom * req.body.rate
-    });
+    const { type, currency_from, currency_to, amount_from, rate, payment_method, description } = req.body;
     
-    // Обновить счетчик сделок
-    const today = new Date().setHours(0, 0, 0, 0);
-    if (!req.user.lastDealDate || new Date(req.user.lastDealDate).setHours(0, 0, 0, 0) !== today) {
-      req.user.dailyDealsCount = 1;
-      req.user.lastDealDate = new Date();
+    const insert = db.prepare(`
+      INSERT INTO deals (creator_id, type, currency_from, currency_to, amount_from, amount_to, rate, payment_method, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = insert.run(
+      req.user.id,
+      type,
+      currency_from,
+      currency_to,
+      amount_from,
+      amount_from * rate,
+      rate,
+      payment_method ? JSON.stringify(payment_method) : null,
+      description
+    );
+    
+    // Обновить счетчик
+    const now = Math.floor(Date.now() / 1000);
+    const today = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+    const lastDealDay = req.user.last_deal_date ? 
+      Math.floor(new Date(req.user.last_deal_date * 1000).setHours(0, 0, 0, 0) / 1000) : 0;
+    
+    if (lastDealDay !== today) {
+      db.prepare('UPDATE users SET daily_deals_count = 1, last_deal_date = ? WHERE id = ?')
+        .run(now, req.user.id);
     } else {
-      req.user.dailyDealsCount += 1;
-    }
-    await req.user.save();
-    
-    // Уведомление в канал
-    try {
-      const dealText = `
-🆕 <b>Новая сделка!</b>
-
-${deal.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
-${deal.amountFrom} ${deal.currencyFrom} → ${deal.amountTo} ${deal.currencyTo}
-
-Курс: ${deal.rate}
-Продавец: @${req.user.username} (⭐${req.user.rating})
-
-<a href="${config.WEBAPP_URL}/deal/${deal._id}">Открыть сделку</a>
-      `;
-      
-      if (config.NEWS_CHANNEL_ID) {
-        await bot.telegram.sendMessage(config.NEWS_CHANNEL_ID, dealText, { parse_mode: 'HTML' });
-      }
-    } catch (err) {
-      console.error('Ошибка отправки в канал:', err);
+      db.prepare('UPDATE users SET daily_deals_count = daily_deals_count + 1, last_deal_date = ? WHERE id = ?')
+        .run(now, req.user.id);
     }
     
+    const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(result.lastInsertRowid);
     res.json(deal);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -711,555 +467,537 @@ ${deal.amountFrom} ${deal.currencyFrom} → ${deal.amountTo} ${deal.currencyTo}
 });
 
 // Мои сделки
-app.get('/api/deals/my', authMiddleware, async (req, res) => {
-  try {
-    const { status } = req.query;
-    
-    let query = {
-      $or: [
-        { creator: req.user._id },
-        { participant: req.user._id }
-      ]
-    };
-    
-    if (status) query.status = status;
-    
-    const deals = await Deal.find(query)
-      .populate('creator participant', 'username firstName rating verified')
-      .sort({ createdAt: -1 });
-    
-    res.json(deals);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+app.get('/api/deals/my', authMiddleware, (req, res) => {
+  const deals = db.prepare(`
+    SELECT d.*, 
+      c.username as creator_username, c.first_name as creator_name, c.rating as creator_rating,
+      p.username as participant_username, p.first_name as participant_name
+    FROM deals d
+    LEFT JOIN users c ON d.creator_id = c.id
+    LEFT JOIN users p ON d.participant_id = p.id
+    WHERE d.creator_id = ? OR d.participant_id = ?
+    ORDER BY d.created_at DESC
+  `).all(req.user.id, req.user.id);
+  
+  res.json(deals);
 });
 
 // Принять сделку
-app.post('/api/deals/:id/accept', authMiddleware, async (req, res) => {
-  try {
-    const deal = await Deal.findById(req.params.id);
-    
-    if (!deal || deal.status !== 'active') {
-      return res.status(400).json({ error: 'Сделка недоступна' });
-    }
-    
-    if (deal.creator.equals(req.user._id)) {
-      return res.status(400).json({ error: 'Нельзя принять собственную сделку' });
-    }
-    
-    deal.participant = req.user._id;
-    deal.status = 'in_progress';
-    deal.startedAt = new Date();
-    await deal.save();
-    
-    // Системное сообщение
-    await Message.create({
-      deal: deal._id,
-      sender: req.user._id,
-      text: `${req.user.firstName} принял сделку. Обсудите детали обмена.`,
-      type: 'system'
-    });
-    
-    // Уведомление создателю
-    const creator = await User.findById(deal.creator);
-    if (creator.notifications.newDeals) {
-      try {
-        await bot.telegram.sendMessage(
-          creator.telegramId,
-          `✅ Вашу сделку принял @${req.user.username}!\n\nОткройте приложение для продолжения.`,
-          Markup.inlineKeyboard([
-            [Markup.button.webApp('Открыть чат', `${config.WEBAPP_URL}/deal/${deal._id}`)]
-          ])
-        );
-      } catch (err) {
-        console.error('Ошибка уведомления:', err);
-      }
-    }
-    
-    res.json(deal);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+app.post('/api/deals/:id/accept', authMiddleware, (req, res) => {
+  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
+  
+  if (!deal || deal.status !== 'active') {
+    return res.status(400).json({ error: 'Сделка недоступна' });
   }
+  
+  if (deal.creator_id === req.user.id) {
+    return res.status(400).json({ error: 'Нельзя принять собственную сделку' });
+  }
+  
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare('UPDATE deals SET participant_id = ?, status = ?, started_at = ? WHERE id = ?')
+    .run(req.user.id, 'in_progress', now, req.params.id);
+  
+  // Системное сообщение
+  db.prepare('INSERT INTO messages (deal_id, sender_id, text, type) VALUES (?, ?, ?, ?)')
+    .run(req.params.id, req.user.id, `${req.user.first_name} принял сделку`, 'system');
+  
+  const updatedDeal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
+  res.json(updatedDeal);
 });
 
 // Завершить сделку
-app.post('/api/deals/:id/complete', authMiddleware, async (req, res) => {
-  try {
-    const deal = await Deal.findById(req.params.id).populate('creator participant');
-    
-    if (!deal || deal.status !== 'in_progress') {
-      return res.status(400).json({ error: 'Сделка недоступна' });
-    }
-    
-    if (!deal.creator._id.equals(req.user._id) && !deal.participant._id.equals(req.user._id)) {
-      return res.status(403).json({ error: 'Доступ запрещен' });
-    }
-    
-    deal.status = 'completed';
-    deal.completedAt = new Date();
-    await deal.save();
-    
-    // Обновить рейтинги
-    await User.findByIdAndUpdate(deal.creator._id, {
-      $inc: { completedDeals: 1, rating: 2 }
-    });
-    await User.findByIdAndUpdate(deal.participant._id, {
-      $inc: { completedDeals: 1, rating: 2 }
-    });
-    
-    // Системное сообщение
-    await Message.create({
-      deal: deal._id,
-      sender: req.user._id,
-      text: `✅ Сделка успешно завершена! Рейтинг участников обновлен.`,
-      type: 'system'
-    });
-    
-    res.json(deal);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+app.post('/api/deals/:id/complete', authMiddleware, (req, res) => {
+  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
+  
+  if (!deal || deal.status !== 'in_progress') {
+    return res.status(400).json({ error: 'Сделка недоступна' });
   }
+  
+  if (deal.creator_id !== req.user.id && deal.participant_id !== req.user.id) {
+    return res.status(403).json({ error: 'Доступ запрещен' });
+  }
+  
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare('UPDATE deals SET status = ?, completed_at = ? WHERE id = ?')
+    .run('completed', now, req.params.id);
+  
+  // Обновить рейтинги
+  db.prepare('UPDATE users SET completed_deals = completed_deals + 1, rating = rating + 2 WHERE id = ?')
+    .run(deal.creator_id);
+  
+  if (deal.participant_id) {
+    db.prepare('UPDATE users SET completed_deals = completed_deals + 1, rating = rating + 2 WHERE id = ?')
+      .run(deal.participant_id);
+  }
+  
+  res.json({ success: true });
 });
 
 // Отменить сделку
-app.post('/api/deals/:id/cancel', authMiddleware, async (req, res) => {
-  try {
-    const { reason } = req.body;
-    const deal = await Deal.findById(req.params.id);
-    
-    if (!deal.creator.equals(req.user._id)) {
-      return res.status(403).json({ error: 'Только создатель может отменить' });
-    }
-    
-    deal.status = 'cancelled';
-    deal.cancelledAt = new Date();
-    deal.cancelReason = reason;
-    await deal.save();
-    
-    // Обновить статистику
-    await User.findByIdAndUpdate(req.user._id, {
-      $inc: { cancelledDeals: 1 }
-    });
-    
-    res.json(deal);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+app.post('/api/deals/:id/cancel', authMiddleware, (req, res) => {
+  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
+  
+  if (deal.creator_id !== req.user.id) {
+    return res.status(403).json({ error: 'Только создатель может отменить' });
   }
+  
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare('UPDATE deals SET status = ?, cancelled_at = ? WHERE id = ?')
+    .run('cancelled', now, req.params.id);
+  
+  db.prepare('UPDATE users SET cancelled_deals = cancelled_deals + 1 WHERE id = ?')
+    .run(req.user.id);
+  
+  res.json({ success: true });
 });
 
-// Получить сообщения сделки
-app.get('/api/deals/:id/messages', authMiddleware, async (req, res) => {
-  try {
-    const messages = await Message.find({ deal: req.params.id })
-      .populate('sender', 'username firstName')
-      .sort({ createdAt: 1 });
-    
-    // Отметить как прочитанные
-    await Message.updateMany(
-      { deal: req.params.id, sender: { $ne: req.user._id }, read: false },
-      { read: true }
-    );
-    
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Сообщения
+app.get('/api/deals/:id/messages', authMiddleware, (req, res) => {
+  const messages = db.prepare(`
+    SELECT m.*, u.username, u.first_name
+    FROM messages m
+    JOIN users u ON m.sender_id = u.id
+    WHERE m.deal_id = ?
+    ORDER BY m.created_at ASC
+  `).all(req.params.id);
+  
+  res.json(messages.map(m => ({
+    ...m,
+    sender: {
+      username: m.username,
+      first_name: m.first_name
+    }
+  })));
 });
 
-// Продвижение сделки
-app.post('/api/deals/:id/promote', authMiddleware, async (req, res) => {
-  try {
-    const { type } = req.body; // 'top', 'highlight', 'pin'
-    
-    const promotion = config.PROMOTION[type];
-    if (!promotion) {
-      return res.status(400).json({ error: 'Неверный тип продвижения' });
-    }
-    
-    const price = promotion.price;
-    
-    if (req.user.balance < price) {
-      return res.status(400).json({ error: 'Недостаточно средств на балансе' });
-    }
-    
-    const deal = await Deal.findById(req.params.id);
-    
-    if (!deal.creator.equals(req.user._id)) {
-      return res.status(403).json({ error: 'Только создатель может продвигать' });
-    }
-    
-    if (type === 'top' || type === 'pin') {
-      deal.promoted.topUntil = new Date(Date.now() + promotion.duration);
-      if (type === 'pin') deal.promoted.pinned = true;
-    } else if (type === 'highlight') {
-      deal.promoted.highlighted = true;
-    }
-    
-    await deal.save();
-    
-    req.user.balance -= price;
-    await req.user.save();
-    
-    await Transaction.create({
-      user: req.user._id,
-      type: 'promotion',
-      amount: -price,
-      description: `Продвижение сделки: ${type}`,
-      metadata: { dealId: deal._id, promotionType: type }
-    });
-    
-    res.json({ deal, balance: req.user.balance });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// Продвижение
+app.post('/api/deals/:id/promote', authMiddleware, (req, res) => {
+  const { type } = req.body;
+  const promotion = CONFIG.PROMOTION[type];
+  
+  if (!promotion) {
+    return res.status(400).json({ error: 'Неверный тип продвижения' });
   }
+  
+  if (req.user.balance < promotion.price) {
+    return res.status(400).json({ error: 'Недостаточно средств' });
+  }
+  
+  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
+  
+  if (deal.creator_id !== req.user.id) {
+    return res.status(403).json({ error: 'Доступ запрещен' });
+  }
+  
+  const now = Math.floor(Date.now() / 1000);
+  
+  if (type === 'top' || type === 'pin') {
+    const until = now + (promotion.hours * 3600);
+    const pinned = type === 'pin' ? 1 : 0;
+    db.prepare('UPDATE deals SET promoted_top_until = ?, promoted_pinned = ? WHERE id = ?')
+      .run(until, pinned, req.params.id);
+  } else if (type === 'highlight') {
+    db.prepare('UPDATE deals SET promoted_highlighted = 1 WHERE id = ?')
+      .run(req.params.id);
+  }
+  
+  db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?')
+    .run(promotion.price, req.user.id);
+  
+  db.prepare('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)')
+    .run(req.user.id, 'promotion', -promotion.price, `Продвижение: ${type}`);
+  
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json({ success: true, balance: user.balance });
 });
 
-// Получить курсы валют
-app.get('/api/rates', async (req, res) => {
-  try {
-    const rates = await Rate.find().sort({ pair: 1 });
-    res.json(rates);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Курсы
+app.get('/api/rates', (req, res) => {
+  const rates = db.prepare('SELECT * FROM rates ORDER BY pair').all();
+  res.json(rates);
 });
 
-// Получить новости
-app.get('/api/news', async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    
-    const news = await News.find({ published: true })
-      .sort({ important: -1, createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-    
-    const total = await News.countDocuments({ published: true });
-    
-    res.json({
-      news,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Новости
+app.get('/api/news', (req, res) => {
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  
+  const news = db.prepare('SELECT * FROM news WHERE published = 1 ORDER BY important DESC, created_at DESC LIMIT ? OFFSET ?')
+    .all(parseInt(limit), offset);
+  
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM news WHERE published = 1').get();
+  
+  res.json({
+    news,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  });
 });
 
-// Купить подписку PRO
-app.post('/api/subscription/buy', authMiddleware, async (req, res) => {
-  try {
-    const price = config.SUBSCRIPTION.PRO.price;
-    
-    if (req.user.balance < price) {
-      return res.status(400).json({ error: 'Недостаточно средств. Пополните баланс.' });
-    }
-    
-    const expiresAt = new Date(Date.now() + config.SUBSCRIPTION.PRO.duration);
-    
-    req.user.subscription.type = 'pro';
-    req.user.subscription.expiresAt = expiresAt;
-    req.user.balance -= price;
-    await req.user.save();
-    
-    await Transaction.create({
-      user: req.user._id,
-      type: 'subscription',
-      amount: -price,
-      description: 'PRO подписка на 30 дней'
-    });
-    
-    // Уведомление
-    try {
-      await bot.telegram.sendMessage(
-        req.user.telegramId,
-        `🎉 Поздравляем! PRO подписка активирована!\n\nДействует до: ${formatDate(expiresAt)}\n\nТеперь вам доступны все возможности!`
-      );
-    } catch (err) {
-      console.error('Ошибка уведомления:', err);
-    }
-    
-    res.json(req.user);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// Подписка
+app.post('/api/subscription/buy', authMiddleware, (req, res) => {
+  const price = CONFIG.SUBSCRIPTION.PRO.price;
+  
+  if (req.user.balance < price) {
+    return res.status(400).json({ error: 'Недостаточно средств' });
   }
+  
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + (CONFIG.SUBSCRIPTION.PRO.days * 24 * 3600);
+  
+  db.prepare('UPDATE users SET subscription_type = ?, subscription_expires = ?, balance = balance - ? WHERE id = ?')
+    .run('pro', expiresAt, price, req.user.id);
+  
+  db.prepare('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)')
+    .run(req.user.id, 'subscription', -price, 'PRO подписка на 30 дней');
+  
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json(user);
 });
 
-// Пополнить баланс
-app.post('/api/balance/topup', authMiddleware, async (req, res) => {
-  try {
-    const { amount } = req.body;
-    
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Некорректная сумма' });
-    }
-    
-    // Здесь должна быть интеграция с платежной системой
-    // Для демо просто начисляем
-    req.user.balance += amount;
-    await req.user.save();
-    
-    await Transaction.create({
-      user: req.user._id,
-      type: 'donation',
-      amount: amount,
-      description: 'Пополнение баланса'
-    });
-    
-    res.json({ balance: req.user.balance });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// Пополнение баланса
+app.post('/api/balance/topup', authMiddleware, (req, res) => {
+  const { amount } = req.body;
+  
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ error: 'Некорректная сумма' });
   }
+  
+  db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?')
+    .run(amount, req.user.id);
+  
+  db.prepare('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)')
+    .run(req.user.id, 'donation', amount, 'Пополнение баланса');
+  
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json({ balance: user.balance });
 });
 
-// Статистика (PRO)
-app.get('/api/stats', authMiddleware, async (req, res) => {
-  try {
-    const isPro = req.user.subscription.type === 'pro' && 
-                  req.user.subscription.expiresAt > new Date();
-    
-    if (!isPro) {
-      return res.status(403).json({ error: 'Требуется PRO подписка' });
-    }
-    
-    const stats = await Deal.aggregate([
-      { $match: { creator: req.user._id } },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-          totalAmount: { $sum: '$amountFrom' }
-        }
-      }
-    ]);
-    
-    const transactions = await Transaction.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(10);
-    
-    res.json({ stats, transactions });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// Статистика
+app.get('/api/stats', authMiddleware, (req, res) => {
+  const isPro = req.user.subscription_type === 'pro' && 
+                req.user.subscription_expires > Math.floor(Date.now() / 1000);
+  
+  if (!isPro) {
+    return res.status(403).json({ error: 'Требуется PRO подписка' });
   }
+  
+  const dealsByStatus = db.prepare(`
+    SELECT status, COUNT(*) as count, SUM(amount_from) as total_amount
+    FROM deals
+    WHERE creator_id = ?
+    GROUP BY status
+  `).all(req.user.id);
+  
+  const transactions = db.prepare('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10')
+    .all(req.user.id);
+  
+  res.json({ stats: dealsByStatus, transactions });
 });
 
 // Топ пользователей
-app.get('/api/leaderboard', async (req, res) => {
-  try {
-    const { type = 'rating', limit = 10 } = req.query;
-    
-    let sortField = 'rating';
-    if (type === 'deals') sortField = 'completedDeals';
-    
-    const users = await User.find({ verified: true })
-      .select('username firstName rating completedDeals verified')
-      .sort({ [sortField]: -1 })
-      .limit(parseInt(limit));
-    
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+app.get('/api/leaderboard', (req, res) => {
+  const { type = 'rating', limit = 10 } = req.query;
+  const field = type === 'deals' ? 'completed_deals' : 'rating';
+  
+  const users = db.prepare(`
+    SELECT id, username, first_name, rating, completed_deals, verified
+    FROM users
+    WHERE verified = 1
+    ORDER BY ${field} DESC
+    LIMIT ?
+  `).all(parseInt(limit));
+  
+  res.json(users);
 });
 
 // ============================================
-// 💬 WEBSOCKET (CHAT)
+// 💬 WEBSOCKET
 // ============================================
 
+const wsConnections = {};
+
 io.on('connection', (socket) => {
-  console.log('✅ Пользователь подключился:', socket.id);
+  console.log('✅ WebSocket подключение:', socket.id);
   
-  // Присоединение к чату сделки
-  socket.on('join_deal', async (dealId) => {
+  socket.on('join_deal', (dealId) => {
     socket.join(`deal_${dealId}`);
-    console.log(`📥 Пользователь присоединился к сделке ${dealId}`);
+    if (!wsConnections[dealId]) wsConnections[dealId] = [];
+    wsConnections[dealId].push(socket.id);
+    console.log(`📥 Присоединение к сделке ${dealId}`);
   });
   
-  // Отправка сообщения
-  socket.on('send_message', async (data) => {
+  socket.on('send_message', (data) => {
     try {
       const { dealId, userId, text, type = 'text' } = data;
       
-      const message = await Message.create({
-        deal: dealId,
-        sender: userId,
-        text,
-        type
-      });
+      const insert = db.prepare('INSERT INTO messages (deal_id, sender_id, text, type) VALUES (?, ?, ?, ?)');
+      const result = insert.run(dealId, userId, text, type);
       
-      await message.populate('sender', 'username firstName');
+      const message = db.prepare(`
+        SELECT m.*, u.username, u.first_name
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.id = ?
+      `).get(result.lastInsertRowid);
       
-      io.to(`deal_${dealId}`).emit('new_message', message);
-      
-      // Уведомление собеседнику
-      const deal = await Deal.findById(dealId).populate('creator participant');
-      const recipient = deal.creator._id.toString() === userId ? 
-        deal.participant : deal.creator;
-      
-      if (recipient && recipient.notifications.messages) {
-        try {
-          await bot.telegram.sendMessage(
-            recipient.telegramId,
-            `💬 Новое сообщение в сделке!\n\n"${text}"\n\nОткройте приложение для ответа.`,
-            Markup.inlineKeyboard([
-              [Markup.button.webApp('Открыть чат', `${config.WEBAPP_URL}/deal/${dealId}`)]
-            ])
-          );
-        } catch (err) {
-          console.error('Ошибка уведомления:', err);
+      io.to(`deal_${dealId}`).emit('new_message', {
+        ...message,
+        sender: {
+          username: message.username,
+          first_name: message.first_name
         }
-      }
+      });
     } catch (error) {
       socket.emit('error', { message: error.message });
     }
   });
   
-  // Пользователь печатает
-  socket.on('typing', (data) => {
-    socket.to(`deal_${data.dealId}`).emit('user_typing', data);
+  socket.on('disconnect', () => {
+    console.log('❌ WebSocket отключение:', socket.id);
+    for (const dealId in wsConnections) {
+      wsConnections[dealId] = wsConnections[dealId].filter(id => id !== socket.id);
+    }
+  });
+});
+
+// ============================================
+// 🤖 TELEGRAM BOT
+// ============================================
+
+console.log('\x1b[33m%s\x1b[0m', '🤖 Инициализация Telegram бота...');
+
+const bot = new Telegraf(CONFIG.BOT_TOKEN);
+
+bot.command('start', async (ctx) => {
+  const userId = ctx.from.id;
+  const user = getOrCreateUser(userId, {
+    username: ctx.from.username,
+    first_name: ctx.from.first_name,
+    last_name: ctx.from.last_name
   });
   
-  // Отключение
-  socket.on('disconnect', () => {
-    console.log('❌ Пользователь отключился:', socket.id);
-  });
+  const welcomeText = `
+🎉 <b>Добро пожаловать в Exchange Mini App!</b>
+
+💱 Самый удобный P2P обменник в Telegram!
+
+<b>Что вы можете делать:</b>
+🔹 Создавать объявления о покупке/продаже
+🔹 Находить выгодные предложения
+🔹 Безопасно обмениваться через чат
+🔹 Отслеживать актуальные курсы
+🔹 Зарабатывать рейтинг
+
+<b>Ваш тариф:</b> ${user.subscription_type === 'pro' ? '👑 PRO' : '🆓 FREE'}
+${user.subscription_type === 'free' ? `Лимит: ${CONFIG.SUBSCRIPTION.FREE.dailyDeals} сделки/день` : '♾️ Безлимит'}
+
+<b>Рейтинг:</b> ⭐ ${user.rating}
+<b>Сделок:</b> ✅ ${user.completed_deals}
+
+👇 <b>Нажмите кнопку ниже!</b>
+  `;
+  
+  await ctx.replyWithHTML(
+    welcomeText,
+    Markup.keyboard([
+      [Markup.button.webApp('🚀 Открыть Exchange App', CONFIG.WEBAPP_URL)],
+      ['📊 Статистика', '👤 Профиль'],
+      ['💎 Подписка PRO', '❓ Помощь']
+    ]).resize()
+  );
+});
+
+bot.hears('👤 Профиль', async (ctx) => {
+  const user = getOrCreateUser(ctx.from.id);
+  
+  const profileText = `
+👤 <b>ВАШ ПРОФИЛЬ</b>
+
+<b>Имя:</b> ${user.first_name || ''} ${user.last_name || ''}
+<b>Username:</b> @${user.username || 'не указан'}
+
+<b>Тариф:</b> ${user.subscription_type === 'pro' ? '👑 PRO' : '🆓 FREE'}
+<b>Рейтинг:</b> ⭐ ${user.rating}
+<b>Завершено:</b> ✅ ${user.completed_deals}
+<b>Отменено:</b> ❌ ${user.cancelled_deals}
+
+<b>Баланс:</b> 💰 ${formatNumber(user.balance)} ₽
+
+<b>Реферальный код:</b> <code>${user.referral_code}</code>
+  `;
+  
+  await ctx.replyWithHTML(profileText);
+});
+
+bot.hears('📊 Статистика', async (ctx) => {
+  const user = getOrCreateUser(ctx.from.id);
+  
+  const myDeals = db.prepare('SELECT COUNT(*) as count FROM deals WHERE creator_id = ? OR participant_id = ?')
+    .get(user.id, user.id);
+  
+  const activeDeals = db.prepare(`
+    SELECT COUNT(*) as count FROM deals 
+    WHERE (creator_id = ? OR participant_id = ?) AND status IN ('active', 'in_progress')
+  `).get(user.id, user.id);
+  
+  const totals = db.prepare('SELECT COUNT(*) as deals, (SELECT COUNT(*) FROM users) as users FROM deals').get();
+  
+  const statsText = `
+📊 <b>СТАТИСТИКА</b>
+
+<b>Ваши показатели:</b>
+📝 Всего сделок: ${myDeals.count}
+🟢 Активных: ${activeDeals.count}
+✅ Завершено: ${user.completed_deals}
+❌ Отменено: ${user.cancelled_deals}
+⭐ Рейтинг: ${user.rating}
+${user.subscription_type === 'free' ? `📅 Сегодня: ${user.daily_deals_count}/3` : ''}
+
+<b>Общая статистика:</b>
+👥 Пользователей: ${formatNumber(totals.users)}
+💱 Сделок: ${formatNumber(totals.deals)}
+  `;
+  
+  await ctx.replyWithHTML(statsText);
+});
+
+bot.hears('💎 Подписка PRO', async (ctx) => {
+  const user = getOrCreateUser(ctx.from.id);
+  const now = Math.floor(Date.now() / 1000);
+  const isPro = user.subscription_type === 'pro' && user.subscription_expires > now;
+  
+  const proText = `
+💎 <b>ПОДПИСКА PRO</b>
+
+${isPro ? '✅ У вас PRO подписка!' : '🆓 У вас FREE тариф'}
+
+<b>Преимущества PRO:</b>
+♾️ Безлимит сделок
+🚀 Приоритет в списке
+⚡ Автоподбор объявлений
+✓ Значок проверенного
+📊 Статистика
+🎯 Скидки на продвижение
+
+<b>Цена:</b> ${CONFIG.SUBSCRIPTION.PRO.price} ₽/месяц
+
+${!isPro ? 'Откройте приложение для покупки!' : `Действует до: ${formatDate(user.subscription_expires)}`}
+  `;
+  
+  await ctx.replyWithHTML(
+    proText,
+    Markup.inlineKeyboard([
+      [Markup.button.webApp('💎 Оформить PRO', `${CONFIG.WEBAPP_URL}/subscription`)]
+    ])
+  );
+});
+
+bot.hears('❓ Помощь', async (ctx) => {
+  const helpText = `
+❓ <b>ПОМОЩЬ</b>
+
+<b>Команды:</b>
+/start - Запуск бота
+/help - Помощь
+
+<b>Как создать сделку:</b>
+1. Откройте приложение
+2. "Создать сделку"
+3. Укажите параметры
+4. Дождитесь отклика
+
+<b>Тарифы:</b>
+🆓 FREE - 3 сделки/день
+👑 PRO - Безлимит
+
+<b>Поддержка:</b> @support
+  `;
+  
+  await ctx.replyWithHTML(helpText);
+});
+
+bot.catch((err, ctx) => {
+  console.error('❌ Ошибка бота:', err);
+  ctx.reply('Произошла ошибка. Попробуйте позже.');
 });
 
 // ============================================
 // ⏰ CRON JOBS
 // ============================================
 
-// Обновление курсов валют (каждые 5 минут)
-cron.schedule('*/5 * * * *', async () => {
-  console.log('🔄 Обновление курсов валют...');
-  // Здесь интеграция с API курсов (CoinGecko, Binance и т.д.)
-});
-
 // Очистка истекших продвижений (каждый час)
-cron.schedule('0 * * * *', async () => {
-  console.log('🧹 Очистка истекших продвижений...');
-  
-  const now = new Date();
-  await Deal.updateMany(
-    { 'promoted.topUntil': { $lt: now } },
-    { 
-      $set: { 
-        'promoted.topUntil': null,
-        'promoted.pinned': false 
-      } 
-    }
-  );
+cron.schedule('0 * * * *', () => {
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare('UPDATE deals SET promoted_top_until = NULL, promoted_pinned = 0 WHERE promoted_top_until < ?')
+    .run(now);
+  console.log('🧹 Очистка истекших продвижений');
 });
 
-// Проверка истекших подписок (каждый день)
-cron.schedule('0 0 * * *', async () => {
-  console.log('🔍 Проверка подписок...');
-  
-  const now = new Date();
-  const expiredUsers = await User.find({
-    'subscription.type': 'pro',
-    'subscription.expiresAt': { $lt: now }
-  });
-  
-  for (const user of expiredUsers) {
-    user.subscription.type = 'free';
-    await user.save();
-    
-    // Уведомление
-    try {
-      await bot.telegram.sendMessage(
-        user.telegramId,
-        '⚠️ Ваша PRO подписка истекла.\n\nОбновите подписку, чтобы продолжить пользоваться всеми возможностями!',
-        Markup.inlineKeyboard([
-          [Markup.button.webApp('Продлить PRO', `${config.WEBAPP_URL}/subscription`)]
-        ])
-      );
-    } catch (err) {
-      console.error('Ошибка уведомления:', err);
-    }
-  }
-  
-  console.log(`✅ Обновлено подписок: ${expiredUsers.length}`);
+// Проверка подписок (раз в день)
+cron.schedule('0 0 * * *', () => {
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare('UPDATE users SET subscription_type = ? WHERE subscription_type = ? AND subscription_expires < ?')
+    .run('free', 'pro', now);
+  console.log('🔍 Проверка подписок');
 });
 
 // ============================================
-// 🚀 ЗАПУСК СЕРВЕРА
+// 🚀 ЗАПУСК
 // ============================================
 
-const startServer = async () => {
+async function start() {
   try {
-    // Подключение к MongoDB
-    console.log('\x1b[33m%s\x1b[0m', '📦 Подключение к MongoDB...');
-    await mongoose.connect(config.MONGODB_URI);
-    console.log('\x1b[32m%s\x1b[0m', '✅ MongoDB подключена успешно!\n');
-    
-    // Создание начальных данных
-    const ratesCount = await Rate.countDocuments();
-    if (ratesCount === 0) {
-      console.log('\x1b[33m%s\x1b[0m', '📊 Создание начальных курсов...');
-      await Rate.insertMany([
-        { pair: 'BTC/USDT', rate: 43500, change24h: 2.5 },
-        { pair: 'ETH/USDT', rate: 2250, change24h: 1.8 },
-        { pair: 'TON/USDT', rate: 2.35, change24h: -0.5 },
-        { pair: 'BNB/USDT', rate: 310, change24h: 3.2 },
-        { pair: 'USD/RUB', rate: 92.5, change24h: 0.1 },
-        { pair: 'EUR/RUB', rate: 101.2, change24h: -0.3 }
-      ]);
-      console.log('\x1b[32m%s\x1b[0m', '✅ Курсы созданы\n');
-    }
+    // Запуск HTTP сервера
+    httpServer.listen(CONFIG.PORT, CONFIG.HOST, () => {
+      console.log('\x1b[32m%s\x1b[0m', `✅ HTTP сервер запущен на ${CONFIG.HOST}:${CONFIG.PORT}\n`);
+    });
     
     // Запуск бота
-    console.log('\x1b[33m%s\x1b[0m', '🤖 Запуск Telegram бота...');
     await bot.launch();
-    console.log('\x1b[32m%s\x1b[0m', '✅ Бот запущен успешно!\n');
+    console.log('\x1b[32m%s\x1b[0m', '✅ Telegram бот запущен!\n');
     
-    // Запуск HTTP сервера
-    console.log('\x1b[33m%s\x1b[0m', `🌐 Запуск сервера на порту ${config.PORT}...`);
-    httpServer.listen(config.PORT, () => {
-      console.log('\x1b[32m%s\x1b[0m', `✅ Сервер запущен на http://localhost:${config.PORT}\n`);
-      
-      // Финальное сообщение
-      console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
-      console.log('\x1b[42m\x1b[30m%s\x1b[0m', '  🎉 ВСЕ СИСТЕМЫ ЗАПУЩЕНЫ И РАБОТАЮТ! 🎉          ');
-      console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
-      console.log('');
-      console.log('\x1b[36m%s\x1b[0m', '📱 Telegram Bot: @YourBotUsername');
-      console.log('\x1b[36m%s\x1b[0m', `🌐 API: http://localhost:${config.PORT}/api`);
-      console.log('\x1b[36m%s\x1b[0m', `💬 WebSocket: http://localhost:${config.PORT}`);
-      console.log('\x1b[36m%s\x1b[0m', `🗄️  Database: ${config.MONGODB_URI}`);
-      console.log('');
-      console.log('\x1b[33m%s\x1b[0m', '💡 Нажмите Ctrl+C для остановки');
-      console.log('');
-    });
+    // Финальное сообщение
+    console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
+    console.log('\x1b[42m\x1b[30m%s\x1b[0m', '  🎉 ВСЕ СИСТЕМЫ ЗАПУЩЕНЫ И РАБОТАЮТ! 🎉          ');
+    console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
+    console.log('');
+    console.log('\x1b[36m%s\x1b[0m', '📱 Telegram Bot: @YourBotUsername');
+    console.log('\x1b[36m%s\x1b[0m', `🌐 API: http://${CONFIG.HOST}:${CONFIG.PORT}/api`);
+    console.log('\x1b[36m%s\x1b[0m', `💬 WebSocket: ws://${CONFIG.HOST}:${CONFIG.PORT}`);
+    console.log('\x1b[36m%s\x1b[0m', `🗄️  Database: SQLite (exchange.db)`);
+    console.log('\x1b[36m%s\x1b[0m', `🌍 Bothost URL: https://cryptobot.bothost.ru`);
+    console.log('');
     
   } catch (error) {
     console.error('\x1b[31m%s\x1b[0m', '❌ ОШИБКА ЗАПУСКА:', error);
     process.exit(1);
   }
-};
+}
 
 // Graceful shutdown
 process.once('SIGINT', () => {
-  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Получен сигнал SIGINT. Останавливаем сервисы...');
+  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка сервисов...');
   bot.stop('SIGINT');
-  mongoose.connection.close();
   httpServer.close();
-  console.log('\x1b[32m%s\x1b[0m', '✅ Сервисы остановлены. До свидания!\n');
+  db.close();
+  console.log('\x1b[32m%s\x1b[0m', '✅ Остановлено. До свидания!\n');
   process.exit(0);
 });
 
 process.once('SIGTERM', () => {
-  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Получен сигнал SIGTERM. Останавливаем сервисы...');
+  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка сервисов...');
   bot.stop('SIGTERM');
-  mongoose.connection.close();
   httpServer.close();
-  console.log('\x1b[32m%s\x1b[0m', '✅ Сервисы остановлены. До свидания!\n');
+  db.close();
+  console.log('\x1b[32m%s\x1b[0m', '✅ Остановлено. До свидания!\n');
   process.exit(0);
 });
 
-// Запуск
-startServer();
+// Запуск!
+start();
