@@ -1,21 +1,19 @@
 /**
  * ╔═══════════════════════════════════════════════════════════════╗
  * ║   💱 EXCHANGE MINI APP - P2P Обменник для Telegram           ║
- * ║   🚀 v2.0.0 - Bothost Edition (Node.js + SQLite)             ║
+ * ║   🚀 v2.0.0 - Bothost Edition (CommonJS + SQLite)            ║
  * ╚═══════════════════════════════════════════════════════════════╝
  */
 
-import { Telegraf, Markup } from 'telegraf';
-import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import Database from 'better-sqlite3';
-import cors from 'cors';
-import crypto from 'crypto';
-import { config } from 'dotenv';
-import cron from 'node-cron';
-
-config();
+const { Telegraf, Markup } = require('telegraf');
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const Database = require('better-sqlite3');
+const cors = require('cors');
+const crypto = require('crypto');
+require('dotenv').config();
+const cron = require('node-cron');
 
 // ============================================
 // 🎨 КРАСИВОЕ ПРИВЕТСТВИЕ
@@ -138,18 +136,6 @@ db.exec(`
     FOREIGN KEY (sender_id) REFERENCES users(id)
   );
 
-  CREATE TABLE IF NOT EXISTS news (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    image TEXT,
-    category TEXT DEFAULT 'info',
-    important INTEGER DEFAULT 0,
-    published INTEGER DEFAULT 1,
-    views INTEGER DEFAULT 0,
-    created_at INTEGER DEFAULT (strftime('%s', 'now'))
-  );
-
   CREATE TABLE IF NOT EXISTS rates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pair TEXT UNIQUE NOT NULL,
@@ -262,7 +248,6 @@ function canCreateDeal(user) {
     return { allowed: true };
   }
   
-  // FREE - 3 сделки в день
   const today = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
   const lastDealDate = user.last_deal_date || 0;
   const lastDealDay = Math.floor(new Date(lastDealDate * 1000).setHours(0, 0, 0, 0) / 1000);
@@ -343,23 +328,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// Профиль
 app.get('/api/profile', authMiddleware, (req, res) => {
   res.json(req.user);
 });
 
-app.put('/api/profile', authMiddleware, (req, res) => {
-  const { language } = req.body;
-  
-  if (language) {
-    db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, req.user.id);
-  }
-  
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  res.json(user);
-});
-
-// Получить сделки
 app.get('/api/deals', authMiddleware, (req, res) => {
   const { type, currency_from, currency_to, page = 1, limit = 20 } = req.query;
   
@@ -379,7 +351,6 @@ app.get('/api/deals', authMiddleware, (req, res) => {
     params.push(currency_to);
   }
   
-  // Сортировка
   const isPro = req.user.subscription_type === 'pro' && 
                 req.user.subscription_expires > Math.floor(Date.now() / 1000);
   
@@ -394,9 +365,7 @@ app.get('/api/deals', authMiddleware, (req, res) => {
   params.push(parseInt(limit), offset);
   
   const deals = db.prepare(query).all(...params);
-  
-  const countQuery = 'SELECT COUNT(*) as total FROM deals WHERE status = ?';
-  const { total } = db.prepare(countQuery).get('active');
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM deals WHERE status = ?').get('active');
   
   res.json({
     deals: deals.map(d => ({
@@ -418,7 +387,6 @@ app.get('/api/deals', authMiddleware, (req, res) => {
   });
 });
 
-// Создать сделку
 app.post('/api/deals', authMiddleware, (req, res) => {
   try {
     const can = canCreateDeal(req.user);
@@ -445,7 +413,6 @@ app.post('/api/deals', authMiddleware, (req, res) => {
       description
     );
     
-    // Обновить счетчик
     const now = Math.floor(Date.now() / 1000);
     const today = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
     const lastDealDay = req.user.last_deal_date ? 
@@ -466,7 +433,6 @@ app.post('/api/deals', authMiddleware, (req, res) => {
   }
 });
 
-// Мои сделки
 app.get('/api/deals/my', authMiddleware, (req, res) => {
   const deals = db.prepare(`
     SELECT d.*, 
@@ -482,7 +448,6 @@ app.get('/api/deals/my', authMiddleware, (req, res) => {
   res.json(deals);
 });
 
-// Принять сделку
 app.post('/api/deals/:id/accept', authMiddleware, (req, res) => {
   const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
   
@@ -498,7 +463,6 @@ app.post('/api/deals/:id/accept', authMiddleware, (req, res) => {
   db.prepare('UPDATE deals SET participant_id = ?, status = ?, started_at = ? WHERE id = ?')
     .run(req.user.id, 'in_progress', now, req.params.id);
   
-  // Системное сообщение
   db.prepare('INSERT INTO messages (deal_id, sender_id, text, type) VALUES (?, ?, ?, ?)')
     .run(req.params.id, req.user.id, `${req.user.first_name} принял сделку`, 'system');
   
@@ -506,7 +470,6 @@ app.post('/api/deals/:id/accept', authMiddleware, (req, res) => {
   res.json(updatedDeal);
 });
 
-// Завершить сделку
 app.post('/api/deals/:id/complete', authMiddleware, (req, res) => {
   const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
   
@@ -522,7 +485,6 @@ app.post('/api/deals/:id/complete', authMiddleware, (req, res) => {
   db.prepare('UPDATE deals SET status = ?, completed_at = ? WHERE id = ?')
     .run('completed', now, req.params.id);
   
-  // Обновить рейтинги
   db.prepare('UPDATE users SET completed_deals = completed_deals + 1, rating = rating + 2 WHERE id = ?')
     .run(deal.creator_id);
   
@@ -534,25 +496,6 @@ app.post('/api/deals/:id/complete', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
-// Отменить сделку
-app.post('/api/deals/:id/cancel', authMiddleware, (req, res) => {
-  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
-  
-  if (deal.creator_id !== req.user.id) {
-    return res.status(403).json({ error: 'Только создатель может отменить' });
-  }
-  
-  const now = Math.floor(Date.now() / 1000);
-  db.prepare('UPDATE deals SET status = ?, cancelled_at = ? WHERE id = ?')
-    .run('cancelled', now, req.params.id);
-  
-  db.prepare('UPDATE users SET cancelled_deals = cancelled_deals + 1 WHERE id = ?')
-    .run(req.user.id);
-  
-  res.json({ success: true });
-});
-
-// Сообщения
 app.get('/api/deals/:id/messages', authMiddleware, (req, res) => {
   const messages = db.prepare(`
     SELECT m.*, u.username, u.first_name
@@ -571,75 +514,11 @@ app.get('/api/deals/:id/messages', authMiddleware, (req, res) => {
   })));
 });
 
-// Продвижение
-app.post('/api/deals/:id/promote', authMiddleware, (req, res) => {
-  const { type } = req.body;
-  const promotion = CONFIG.PROMOTION[type];
-  
-  if (!promotion) {
-    return res.status(400).json({ error: 'Неверный тип продвижения' });
-  }
-  
-  if (req.user.balance < promotion.price) {
-    return res.status(400).json({ error: 'Недостаточно средств' });
-  }
-  
-  const deal = db.prepare('SELECT * FROM deals WHERE id = ?').get(req.params.id);
-  
-  if (deal.creator_id !== req.user.id) {
-    return res.status(403).json({ error: 'Доступ запрещен' });
-  }
-  
-  const now = Math.floor(Date.now() / 1000);
-  
-  if (type === 'top' || type === 'pin') {
-    const until = now + (promotion.hours * 3600);
-    const pinned = type === 'pin' ? 1 : 0;
-    db.prepare('UPDATE deals SET promoted_top_until = ?, promoted_pinned = ? WHERE id = ?')
-      .run(until, pinned, req.params.id);
-  } else if (type === 'highlight') {
-    db.prepare('UPDATE deals SET promoted_highlighted = 1 WHERE id = ?')
-      .run(req.params.id);
-  }
-  
-  db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?')
-    .run(promotion.price, req.user.id);
-  
-  db.prepare('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)')
-    .run(req.user.id, 'promotion', -promotion.price, `Продвижение: ${type}`);
-  
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  res.json({ success: true, balance: user.balance });
-});
-
-// Курсы
 app.get('/api/rates', (req, res) => {
   const rates = db.prepare('SELECT * FROM rates ORDER BY pair').all();
   res.json(rates);
 });
 
-// Новости
-app.get('/api/news', (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
-  
-  const news = db.prepare('SELECT * FROM news WHERE published = 1 ORDER BY important DESC, created_at DESC LIMIT ? OFFSET ?')
-    .all(parseInt(limit), offset);
-  
-  const { total } = db.prepare('SELECT COUNT(*) as total FROM news WHERE published = 1').get();
-  
-  res.json({
-    news,
-    pagination: {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      total,
-      pages: Math.ceil(total / limit)
-    }
-  });
-});
-
-// Подписка
 app.post('/api/subscription/buy', authMiddleware, (req, res) => {
   const price = CONFIG.SUBSCRIPTION.PRO.price;
   
@@ -660,7 +539,6 @@ app.post('/api/subscription/buy', authMiddleware, (req, res) => {
   res.json(user);
 });
 
-// Пополнение баланса
 app.post('/api/balance/topup', authMiddleware, (req, res) => {
   const { amount } = req.body;
   
@@ -678,44 +556,6 @@ app.post('/api/balance/topup', authMiddleware, (req, res) => {
   res.json({ balance: user.balance });
 });
 
-// Статистика
-app.get('/api/stats', authMiddleware, (req, res) => {
-  const isPro = req.user.subscription_type === 'pro' && 
-                req.user.subscription_expires > Math.floor(Date.now() / 1000);
-  
-  if (!isPro) {
-    return res.status(403).json({ error: 'Требуется PRO подписка' });
-  }
-  
-  const dealsByStatus = db.prepare(`
-    SELECT status, COUNT(*) as count, SUM(amount_from) as total_amount
-    FROM deals
-    WHERE creator_id = ?
-    GROUP BY status
-  `).all(req.user.id);
-  
-  const transactions = db.prepare('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10')
-    .all(req.user.id);
-  
-  res.json({ stats: dealsByStatus, transactions });
-});
-
-// Топ пользователей
-app.get('/api/leaderboard', (req, res) => {
-  const { type = 'rating', limit = 10 } = req.query;
-  const field = type === 'deals' ? 'completed_deals' : 'rating';
-  
-  const users = db.prepare(`
-    SELECT id, username, first_name, rating, completed_deals, verified
-    FROM users
-    WHERE verified = 1
-    ORDER BY ${field} DESC
-    LIMIT ?
-  `).all(parseInt(limit));
-  
-  res.json(users);
-});
-
 // ============================================
 // 💬 WEBSOCKET
 // ============================================
@@ -729,7 +569,6 @@ io.on('connection', (socket) => {
     socket.join(`deal_${dealId}`);
     if (!wsConnections[dealId]) wsConnections[dealId] = [];
     wsConnections[dealId].push(socket.id);
-    console.log(`📥 Присоединение к сделке ${dealId}`);
   });
   
   socket.on('send_message', (data) => {
@@ -759,7 +598,6 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
-    console.log('❌ WebSocket отключение:', socket.id);
     for (const dealId in wsConnections) {
       wsConnections[dealId] = wsConnections[dealId].filter(id => id !== socket.id);
     }
@@ -904,7 +742,6 @@ bot.hears('❓ Помощь', async (ctx) => {
 
 <b>Команды:</b>
 /start - Запуск бота
-/help - Помощь
 
 <b>Как создать сделку:</b>
 1. Откройте приложение
@@ -922,16 +759,14 @@ bot.hears('❓ Помощь', async (ctx) => {
   await ctx.replyWithHTML(helpText);
 });
 
-bot.catch((err, ctx) => {
+bot.catch((err) => {
   console.error('❌ Ошибка бота:', err);
-  ctx.reply('Произошла ошибка. Попробуйте позже.');
 });
 
 // ============================================
 // ⏰ CRON JOBS
 // ============================================
 
-// Очистка истекших продвижений (каждый час)
 cron.schedule('0 * * * *', () => {
   const now = Math.floor(Date.now() / 1000);
   db.prepare('UPDATE deals SET promoted_top_until = NULL, promoted_pinned = 0 WHERE promoted_top_until < ?')
@@ -939,7 +774,6 @@ cron.schedule('0 * * * *', () => {
   console.log('🧹 Очистка истекших продвижений');
 });
 
-// Проверка подписок (раз в день)
 cron.schedule('0 0 * * *', () => {
   const now = Math.floor(Date.now() / 1000);
   db.prepare('UPDATE users SET subscription_type = ? WHERE subscription_type = ? AND subscription_expires < ?')
@@ -953,25 +787,22 @@ cron.schedule('0 0 * * *', () => {
 
 async function start() {
   try {
-    // Запуск HTTP сервера
     httpServer.listen(CONFIG.PORT, CONFIG.HOST, () => {
       console.log('\x1b[32m%s\x1b[0m', `✅ HTTP сервер запущен на ${CONFIG.HOST}:${CONFIG.PORT}\n`);
     });
     
-    // Запуск бота
     await bot.launch();
     console.log('\x1b[32m%s\x1b[0m', '✅ Telegram бот запущен!\n');
     
-    // Финальное сообщение
     console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
     console.log('\x1b[42m\x1b[30m%s\x1b[0m', '  🎉 ВСЕ СИСТЕМЫ ЗАПУЩЕНЫ И РАБОТАЮТ! 🎉          ');
     console.log('\x1b[42m\x1b[30m%s\x1b[0m', '                                                    ');
     console.log('');
-    console.log('\x1b[36m%s\x1b[0m', '📱 Telegram Bot: @YourBotUsername');
+    console.log('\x1b[36m%s\x1b[0m', '📱 Telegram Bot: Активен');
     console.log('\x1b[36m%s\x1b[0m', `🌐 API: http://${CONFIG.HOST}:${CONFIG.PORT}/api`);
-    console.log('\x1b[36m%s\x1b[0m', `💬 WebSocket: ws://${CONFIG.HOST}:${CONFIG.PORT}`);
+    console.log('\x1b[36m%s\x1b[0m', `💬 WebSocket: Активен`);
     console.log('\x1b[36m%s\x1b[0m', `🗄️  Database: SQLite (exchange.db)`);
-    console.log('\x1b[36m%s\x1b[0m', `🌍 Bothost URL: https://cryptobot.bothost.ru`);
+    console.log('\x1b[36m%s\x1b[0m', `🌍 Bothost: https://cryptobot.bothost.ru`);
     console.log('');
     
   } catch (error) {
@@ -980,24 +811,20 @@ async function start() {
   }
 }
 
-// Graceful shutdown
 process.once('SIGINT', () => {
-  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка сервисов...');
+  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка...');
   bot.stop('SIGINT');
   httpServer.close();
   db.close();
-  console.log('\x1b[32m%s\x1b[0m', '✅ Остановлено. До свидания!\n');
   process.exit(0);
 });
 
 process.once('SIGTERM', () => {
-  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка сервисов...');
+  console.log('\n\x1b[33m%s\x1b[0m', '⚠️  Остановка...');
   bot.stop('SIGTERM');
   httpServer.close();
   db.close();
-  console.log('\x1b[32m%s\x1b[0m', '✅ Остановлено. До свидания!\n');
   process.exit(0);
 });
 
-// Запуск!
 start();
