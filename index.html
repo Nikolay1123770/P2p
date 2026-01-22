@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Platform</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Wave Background -->
+    <div class="wave-background">
+        <div class="wave-container">
+            <div class="wave-layer wave-layer-1">
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,220 C360,180 720,260 1080,220 C1260,200 1440,240 1440,220 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.04)"/></svg>
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,220 C360,180 720,260 1080,220 C1260,200 1440,240 1440,220 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.04)"/></svg>
+            </div>
+            <div class="wave-layer wave-layer-2">
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,250 C480,210 960,290 1440,250 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.03)"/></svg>
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,250 C480,210 960,290 1440,250 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.03)"/></svg>
+            </div>
+            <div class="wave-layer wave-layer-3">
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,280 C240,260 480,300 720,280 C960,260 1200,300 1440,280 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.025)"/></svg>
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0,280 C240,260 480,300 720,280 C960,260 1200,300 1440,280 L1440,320 L0,320 Z" fill="rgba(59, 130, 246, 0.025)"/></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="screen active">
+        <div class="welcome-content">
+            <div class="welcome-logo">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h1>P2P Platform</h1>
+            <p class="welcome-desc">Площадка для P2P сделок</p>
+
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2V22M17 5H9.5C8.57174 5 7.6815 5.36875 7.02513 6.02513C6.36875 6.6815 6 7.57174 6 8.5C6 9.42826 6.36875 10.3185 7.02513 10.9749C7.6815 11.6313 8.57174 12 9.5 12H14.5C15.4283 12 16.3185 12.3687 16.9749 13.0251C17.6313 13.6815 18 14.5717 18 15.5C18 16.4283 17.6313 17.3185 16.9749 17.9749C16.3185 18.6313 15.4283 19 14.5 19H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="feature-text">
+                        <h3>Создавайте заявки</h3>
+                        <p>Публикуйте заявки на P2P сделки</p>
+                    </div>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                            <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+                            <path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="feature-text">
+                        <h3>Находите предложения</h3>
+                        <p>Просматривайте заявки других пользователей</p>
+                    </div>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                            <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="feature-text">
+                        <h3>Связывайтесь напрямую</h3>
+                        <p>Обсуждайте детали в личных сообщениях</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="disclaimer">
+                <p><strong>Важно:</strong> Сервис не принимает, не хранит и не переводит деньги. Все расчеты происходят напрямую между пользователями вне сервиса.</p>
+            </div>
+
+            <div class="policy-block">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="policyCheckbox">
+                    <span class="checkmark"></span>
+                    <span class="policy-text">Принимаю <a href="#" onclick="showPolicy(); return false;">Политику</a> и <a href="#" onclick="showTerms(); return false;">Условия</a></span>
+                </label>
+            </div>
+
+            <button class="btn-primary" id="startBtn" disabled>Начать</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="screen">
+        <!-- Header -->
+        <header class="app-header">
+            <h1 id="headerTitle">P2P Platform</h1>
+        </header>
+
+        <!-- Home View -->
+        <div id="homeView" class="view active">
+            <div class="home-content">
+                <!-- News Banner -->
+                <div class="news-banner" id="newsBanner" onclick="openNewsModal()">
+                    <div class="news-banner-shimmer"></div>
+                    <div class="news-banner-content">
+                        <span class="news-banner-icon">📢</span>
+                        <div class="news-banner-text">
+                            <span class="news-banner-title" id="bannerNewsTitle">Новости платформы</span>
+                            <span class="news-banner-count" id="bannerNewsCount">0 новых</span>
+                        </div>
+                        <span class="news-banner-arrow">›</span>
+                    </div>
+                </div>
+
+                <div class="action-cards">
+                    <button class="action-card action-card-create" onclick="showCreateOffer()">
+                        <div class="action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-text">
+                            <h3>Создать заявку</h3>
+                            <p>Опубликовать предложение</p>
+                        </div>
+                    </button>
+
+                    <button class="action-card action-card-search" onclick="switchView('offers')">
+                        <div class="action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+                                <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-text">
+                            <h3>Найти сделку</h3>
+                            <p>Просмотреть заявки</p>
+                        </div>
+                    </button>
+
+                    <button class="action-card action-card-deals" onclick="switchView('myDeals')">
+                        <div class="action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+                                <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-text">
+                            <h3>Мои сделки</h3>
+                            <p>История сделок</p>
+                        </div>
+                    </button>
+
+                    <button class="action-card action-card-profile" onclick="switchView('profile')">
+                        <div class="action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+                                <path d="M4 21v-1a4 4 0 014-4h8a4 4 0 014 4v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="action-text">
+                            <h3>Профиль</h3>
+                            <p>Настройки и данные</p>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="rates-section">
+                    <h2>Актуальные курсы</h2>
+                    <div id="exchangeRates" class="rates-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offers View -->
+        <div id="offersView" class="view">
+            <div id="offersList" class="offers-list"></div>
+            <div id="emptyOffers" class="empty-state">
+                <h3>Нет доступных заявок</h3>
+                <p>Создайте свою заявку или проверьте позже</p>
+                <button class="btn-primary" onclick="showCreateOffer()">Создать заявку</button>
+            </div>
+        </div>
+
+        <!-- My Deals View -->
+        <div id="myDealsView" class="view">
+            <div id="myDealsList" class="deals-list"></div>
+            <div id="emptyDeals" class="empty-state">
+                <h3>Нет сделок</h3>
+                <p>Откликнитесь на заявку для начала сделки</p>
+                <button class="btn-primary" onclick="switchView('offers')">Найти сделку</button>
+            </div>
+        </div>
+
+        <!-- Profile View -->
+        <div id="profileView" class="view">
+            <div class="profile-content">
+                <div class="profile-card">
+                    <div class="profile-avatar" id="profileAvatar">U</div>
+                    <div class="profile-info">
+                        <h2 id="profileName">Пользователь</h2>
+                        <span class="profile-username" id="profileUsername">@username</span>
+                    </div>
+                </div>
+
+                <div class="stats-card">
+                    <div class="stat">
+                        <span class="stat-value" id="profileDeals">0</span>
+                        <span class="stat-label">Сделок</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="profileRating">5.0</span>
+                        <span class="stat-label">Рейтинг</span>
+                    </div>
+                </div>
+
+                <!-- Subscription Card -->
+                <div class="subscription-card-new" id="subscriptionCard" onclick="showSubscription()">
+                    <div class="sub-icon" id="subIcon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="sub-content">
+                        <span class="sub-title" id="subTitle">Бесплатный тариф</span>
+                        <span class="sub-desc" id="subDesc">3 сделки в день • Улучшить</span>
+                    </div>
+                    <span class="sub-arrow">›</span>
+                </div>
+
+                <div class="menu-list">
+                    <button class="menu-item" onclick="showMyOffers()">
+                        <div class="menu-icon">📋</div>
+                        <span>Мои заявки</span>
+                        <span class="chevron">›</span>
+                    </button>
+                    <button class="menu-item" onclick="showPromotionOptions()">
+                        <div class="menu-icon">🚀</div>
+                        <span>Продвижение</span>
+                        <span class="chevron">›</span>
+                    </button>
+                    <button class="menu-item" onclick="showDonate()">
+                        <div class="menu-icon">💝</div>
+                        <span>Поддержать проект</span>
+                        <span class="chevron">›</span>
+                    </button>
+                </div>
+
+                <!-- Admin Button (hidden by default) -->
+                <div class="menu-list admin-menu" id="adminMenu" style="display: none;">
+                    <button class="menu-item menu-item-admin" onclick="showAdminPanel()">
+                        <div class="menu-icon">👑</div>
+                        <span>Админ-панель</span>
+                        <span class="chevron">›</span>
+                    </button>
+                </div>
+
+                <div class="menu-list">
+                    <button class="menu-item menu-item-danger" onclick="resetData()">
+                        <span>Сбросить данные</span>
+                        <span class="chevron">›</span>
+                    </button>
+                </div>
+
+                <div class="version-tag" ondblclick="secretAdmin()">v2.0</div>
+            </div>
+        </div>
+
+        <!-- Deal View -->
+        <div id="dealView" class="view">
+            <div class="deal-view-header">
+                <button class="back-btn" onclick="backFromDeal()">‹</button>
+                <div class="deal-header-info" onclick="showDealInfo()">
+                    <span class="deal-header-name" id="dealHeaderName">Пользователь</span>
+                    <span class="deal-header-status" id="dealHeaderStatus">Ожидает подтверждения</span>
+                </div>
+                <div class="deal-header-chevron">›</div>
+            </div>
+
+            <div class="deal-view-content">
+                <div class="deal-chat">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-container">
+                        <input type="file" id="chatFileInput" class="chat-file-input" accept="image/*">
+                        <button class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <div class="chat-input-wrapper">
+                            <input type="text" id="chatInput" placeholder="Сообщение..." maxlength="1000">
+                        </div>
+                        <button class="chat-voice-btn" id="voiceBtn" onmousedown="startRecording()" onmouseup="stopRecording()" ontouchstart="startRecording()" ontouchend="stopRecording()">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="chat-send-btn" onclick="sendMessage()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Image Preview Modal -->
+                <div class="image-preview-modal" id="imagePreviewModal" onclick="closeImagePreview()">
+                    <button class="image-preview-close">&times;</button>
+                    <img id="previewImage" src="" alt="Preview">
+                </div>
+
+                <!-- Recording Overlay -->
+                <div class="recording-overlay" id="recordingOverlay" style="display: none;">
+                    <div class="recording-info">
+                        <div class="recording-dot"></div>
+                        <span class="recording-time" id="recordingTime">0:00</span>
+                    </div>
+                    <div class="recording-waveform" id="recordingWaveform"></div>
+                    <div class="recording-actions">
+                        <button class="recording-cancel" onclick="cancelRecording()">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <button class="recording-send" onclick="sendVoiceMessage()">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-view="home" onclick="switchView('home')">
+                <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Главная</span>
+            </button>
+            <button class="nav-item" data-view="offers" onclick="switchView('offers')">
+                <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Заявки</span>
+            </button>
+            <button class="nav-item" data-view="myDeals" onclick="switchView('myDeals')">
+                <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Сделки</span>
+            </button>
+            <button class="nav-item" data-view="profile" onclick="switchView('profile')">
+                <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <span>Профиль</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Create Offer Modal -->
+    <div id="createOfferModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('createOfferModal')">‹</button>
+                <h2>Создать заявку</h2>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Отдаю валюту</label>
+                    <select id="offerFromCurrency" class="input-select"></select>
+                </div>
+
+                <div class="input-group">
+                    <label>Получаю валюту</label>
+                    <select id="offerToCurrency" class="input-select"></select>
+                </div>
+
+                <div class="input-group">
+                    <label>Сумма</label>
+                    <input type="number" id="offerAmount" placeholder="1000" class="input-field">
+                </div>
+
+                <div class="input-group">
+                    <label>Курс</label>
+                    <input type="number" step="0.01" id="offerRate" placeholder="480" class="input-field">
+                </div>
+
+                <div class="input-group">
+                    <label>Город</label>
+                    <select id="offerCity" class="input-select"></select>
+                </div>
+
+                <div class="input-group">
+                    <label>Способ расчета</label>
+                    <select id="offerPaymentMethod" class="input-select"></select>
+                </div>
+
+                <div class="disclaimer-small">
+                    <p>Деньги переводятся напрямую между пользователями вне сервиса</p>
+                </div>
+
+                <button id="submitOfferBtn" class="btn-primary">Опубликовать заявку</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Offer Modal -->
+    <div id="viewOfferModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('viewOfferModal')">‹</button>
+                <h2>Детали заявки</h2>
+            </div>
+            <div class="modal-body">
+                <div class="offer-user-info">
+                    <h3 id="viewOfferUser">Пользователь</h3>
+                    <p id="viewOfferRating">5.0 · 0 сделок</p>
+                </div>
+
+                <div class="offer-details-view">
+                    <div class="offer-detail-row">
+                        <span>Направление</span>
+                        <strong id="viewOfferPair">USD → KZT</strong>
+                    </div>
+                    <div class="offer-detail-row">
+                        <span>Сумма</span>
+                        <strong id="viewOfferAmount">1000 USD</strong>
+                    </div>
+                    <div class="offer-detail-row">
+                        <span>Курс</span>
+                        <strong id="viewOfferRate">480</strong>
+                    </div>
+                    <div class="offer-detail-row">
+                        <span>Город</span>
+                        <strong id="viewOfferCity">Алматы</strong>
+                    </div>
+                    <div class="offer-detail-row">
+                        <span>Способ</span>
+                        <strong id="viewOfferMethod">Перевод</strong>
+                    </div>
+                    <div class="offer-detail-row">
+                        <span>Создано</span>
+                        <strong id="viewOfferTime">—</strong>
+                    </div>
+                </div>
+
+                <div class="disclaimer-small">
+                    <p>После отклика свяжитесь с пользователем в Telegram для обсуждения деталей. Деньги переводятся напрямую вне сервиса.</p>
+                </div>
+
+                <button class="btn-primary" onclick="respondToCurrentOffer()">Откликнуться</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- My Offers Modal -->
+    <div id="myOffersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('myOffersModal')">‹</button>
+                <h2>Мои заявки</h2>
+            </div>
+            <div class="modal-body">
+                <div id="myOffersList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy Modal -->
+    <div id="policyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('policyModal')">‹</button>
+                <h2 id="modalTitle">Политика</h2>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Deal Info Sheet -->
+    <div id="dealInfoSheet" class="bottom-sheet">
+        <div class="bottom-sheet-overlay" onclick="closeDealInfo()"></div>
+        <div class="bottom-sheet-content">
+            <div class="bottom-sheet-handle"></div>
+
+            <div class="deal-info-header">
+                <div class="deal-info-avatar" id="dealInfoAvatar">П</div>
+                <div class="deal-info-user">
+                    <h3 id="dealInfoName">Пользователь</h3>
+                    <p id="dealInfoUsername">@username</p>
+                </div>
+            </div>
+
+            <div class="deal-info-details">
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Направление</span>
+                    <span class="deal-info-value" id="dealInfoPair">USD → KZT</span>
+                </div>
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Сумма</span>
+                    <span class="deal-info-value" id="dealInfoAmount">1000 USD</span>
+                </div>
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Курс</span>
+                    <span class="deal-info-value" id="dealInfoRate">480</span>
+                </div>
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Город</span>
+                    <span class="deal-info-value" id="dealInfoCity">Алматы</span>
+                </div>
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Способ</span>
+                    <span class="deal-info-value" id="dealInfoMethod">Перевод</span>
+                </div>
+                <div class="deal-info-row">
+                    <span class="deal-info-label">Статус</span>
+                    <span class="deal-info-value deal-status-badge" id="dealInfoStatus">Ожидает</span>
+                </div>
+            </div>
+
+            <div class="deal-info-actions">
+                <button class="btn-deal-complete" onclick="completeDeal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Завершить сделку
+                </button>
+                <button class="btn-deal-report" onclick="reportDeal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Пожаловаться
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Modal -->
+    <div id="subscriptionModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('subscriptionModal')">‹</button>
+                <h2>Тарифы</h2>
+            </div>
+            <div class="modal-body">
+                <!-- Free Plan -->
+                <div class="plan-card" id="freePlanCard">
+                    <div class="plan-header">
+                        <span class="plan-badge free">FREE</span>
+                        <span class="plan-price">Бесплатно</span>
+                    </div>
+                    <ul class="plan-features">
+                        <li>✓ Создание сделок</li>
+                        <li>✓ Чат внутри сделки</li>
+                        <li>✓ Базовый арбитраж</li>
+                        <li>✓ Рейтинг</li>
+                        <li class="plan-limit">✗ Лимит 3 сделки в день</li>
+                        <li class="plan-limit">✗ Без приоритета в списке</li>
+                    </ul>
+                    <button class="btn-secondary" disabled>Текущий тариф</button>
+                </div>
+
+                <!-- PRO Plan -->
+                <div class="plan-card plan-pro">
+                    <div class="plan-popular">Популярный</div>
+                    <div class="plan-header">
+                        <span class="plan-badge pro">⭐ PRO</span>
+                        <span class="plan-price">5 000 ₸<span class="plan-period">/месяц</span></span>
+                    </div>
+                    <ul class="plan-features">
+                        <li>✓ Всё из бесплатного</li>
+                        <li class="plan-highlight">🔝 Приоритет в списке заявок</li>
+                        <li class="plan-highlight">♻️ Автоповтор объявлений</li>
+                        <li class="plan-highlight">⚡ Быстрое время ожидания</li>
+                        <li class="plan-highlight">⭐ Значок «Проверенный»</li>
+                        <li class="plan-highlight">📊 Статистика сделок</li>
+                        <li class="plan-highlight">🆘 Приоритет в арбитраже</li>
+                        <li>∞ Безлимитные сделки</li>
+                    </ul>
+                    <button class="btn-primary btn-pro" onclick="buyPro()">Оформить PRO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promotion Modal -->
+    <div id="promotionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('promotionModal')">‹</button>
+                <h2>Продвижение</h2>
+            </div>
+            <div class="modal-body">
+                <p class="promo-subtitle">Сделайте вашу заявку заметнее</p>
+
+                <div class="promo-option" onclick="buyPromotion('top')">
+                    <div class="promo-icon">🔝</div>
+                    <div class="promo-info">
+                        <span class="promo-title">Поднять в топ</span>
+                        <span class="promo-desc">Заявка будет первой в списке</span>
+                    </div>
+                    <span class="promo-price">300 ₸</span>
+                </div>
+
+                <div class="promo-option" onclick="buyPromotion('highlight')">
+                    <div class="promo-icon">🔥</div>
+                    <div class="promo-info">
+                        <span class="promo-title">Выделить цветом</span>
+                        <span class="promo-desc">Яркая рамка привлечёт внимание</span>
+                    </div>
+                    <span class="promo-price">200 ₸</span>
+                </div>
+
+                <div class="promo-option" onclick="buyPromotion('pin')">
+                    <div class="promo-icon">📌</div>
+                    <div class="promo-info">
+                        <span class="promo-title">Закрепить на 24 часа</span>
+                        <span class="promo-desc">Всегда в топе целые сутки</span>
+                    </div>
+                    <span class="promo-price">500 ₸</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Donate Modal -->
+    <div id="donateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('donateModal')">‹</button>
+                <h2>Поддержать проект</h2>
+            </div>
+            <div class="modal-body donate-body">
+                <div class="donate-icon">☕</div>
+                <p class="donate-text">Если вам нравится наш сервис, вы можете поддержать разработку</p>
+
+                <div class="donate-amounts">
+                    <button class="donate-amount" onclick="donate(500)">500 ₸</button>
+                    <button class="donate-amount" onclick="donate(1000)">1 000 ₸</button>
+                    <button class="donate-amount" onclick="donate(2000)">2 000 ₸</button>
+                </div>
+
+                <button class="btn-primary" onclick="donateCustom()">Другая сумма</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Fee Modal (after deal completion) -->
+    <div id="serviceFeeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Сервисный сбор</h2>
+            </div>
+            <div class="modal-body">
+                <div class="fee-info">
+                    <p class="fee-title">Для завершения сделки оплатите сервисный сбор</p>
+                    <div class="fee-amount" id="feeAmount">300 ₸</div>
+                </div>
+
+                <p class="fee-disclaimer">
+                    Платёж является оплатой за использование платформы и сервисов сопровождения сделки.
+                    Платформа не участвует в денежных переводах между пользователями.
+                </p>
+
+                <button class="btn-primary" onclick="payServiceFee()">Оплатить</button>
+                <button class="btn-text" onclick="closeModal('serviceFeeModal')">Отменить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- News Channel Modal -->
+    <div id="newsModal" class="modal">
+        <div class="modal-content modal-fullscreen">
+            <div class="modal-header news-modal-header">
+                <button class="back-btn news-back" onclick="closeModal('newsModal')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <div class="news-channel-info">
+                    <span class="news-channel-name">📢 Новости</span>
+                    <span class="news-channel-subs" id="newsSubsCount">P2P Platform</span>
+                </div>
+            </div>
+            <div class="modal-body news-modal-body" id="newsModalList">
+                <!-- News items will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel Modal -->
+    <div id="adminModal" class="modal">
+        <div class="modal-content modal-fullscreen">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('adminModal')">‹</button>
+                <h2>👑 Админ-панель</h2>
+            </div>
+            <div class="modal-body admin-body">
+                <!-- Stats Cards -->
+                <div class="admin-stats">
+                    <div class="admin-stat-card">
+                        <span class="admin-stat-value" id="adminTotalUsers">0</span>
+                        <span class="admin-stat-label">Пользователей</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <span class="admin-stat-value" id="adminTotalDeals">0</span>
+                        <span class="admin-stat-label">Сделок</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <span class="admin-stat-value" id="adminTotalOffers">0</span>
+                        <span class="admin-stat-label">Заявок</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <span class="admin-stat-value" id="adminRevenue">0 ₸</span>
+                        <span class="admin-stat-label">Доход</span>
+                    </div>
+                </div>
+
+                <!-- Period Tabs -->
+                <div class="admin-tabs">
+                    <button class="admin-tab active" onclick="setAdminPeriod('day')">День</button>
+                    <button class="admin-tab" onclick="setAdminPeriod('week')">Неделя</button>
+                    <button class="admin-tab" onclick="setAdminPeriod('month')">Месяц</button>
+                </div>
+
+                <!-- Chart -->
+                <div class="admin-chart-section">
+                    <h3>📊 Активность</h3>
+                    <div class="admin-chart" id="adminChart"></div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="admin-section">
+                    <h3>👥 Пользователи онлайн</h3>
+                    <div class="admin-users-list" id="adminUsersList"></div>
+                </div>
+
+                <!-- Recent Deals -->
+                <div class="admin-section">
+                    <h3>📋 Последние сделки</h3>
+                    <div class="admin-deals-list" id="adminDealsList"></div>
+                </div>
+
+                <!-- News Management -->
+                <div class="admin-section">
+                    <h3>📢 Управление новостями</h3>
+                    <button class="btn-primary" onclick="showAddNewsForm()">+ Добавить новость</button>
+                    <div id="adminNewsList" class="admin-news-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add News Modal -->
+    <div id="addNewsModal" class="modal">
+        <div class="modal-content modal-fullscreen">
+            <div class="modal-header news-modal-header">
+                <button class="back-btn news-back" onclick="closeModal('addNewsModal')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <div class="news-channel-info">
+                    <span class="news-channel-name">✏️ Новый пост</span>
+                    <span class="news-channel-subs">Админ-панель</span>
+                </div>
+            </div>
+            <div class="modal-body news-editor">
+                <!-- Preview -->
+                <div class="news-preview" id="newsPreview">
+                    <div class="news-item">
+                        <div class="news-item-avatar">📢</div>
+                        <div class="news-item-content">
+                            <div class="news-item-header">
+                                <span class="news-item-name">P2P Platform</span>
+                            </div>
+                            <div class="news-bubble">
+                                <div class="news-bubble-title" id="previewTitle">Заголовок</div>
+                                <div class="news-bubble-text" id="previewText">Текст новости...</div>
+                                <img id="previewImage" class="news-bubble-image" style="display:none">
+                            </div>
+                            <div class="news-item-meta">
+                                <span class="news-meta-time">сейчас</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor -->
+                <div class="news-form">
+                    <input type="text" id="newsTitle" class="news-input" placeholder="Заголовок" oninput="updatePreview()">
+                    <textarea id="newsText" class="news-textarea" rows="5" placeholder="Текст сообщения..." oninput="updatePreview()"></textarea>
+
+                    <div class="news-image-upload" onclick="document.getElementById('newsImageInput').click()">
+                        <span id="imageUploadText">📷 Добавить фото</span>
+                        <input type="file" id="newsImageInput" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+                    </div>
+                    <div id="imagePreviewContainer" style="display:none">
+                        <img id="uploadedImagePreview" class="uploaded-preview">
+                        <button class="remove-image" onclick="removeImage()">✕</button>
+                    </div>
+
+                    <div class="news-options">
+                        <label class="news-option">
+                            <input type="checkbox" id="newsPinned">
+                            <span>📌 Закрепить</span>
+                        </label>
+                    </div>
+
+                    <button class="btn-publish" onclick="publishNews()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Опубликовать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comments Modal -->
+    <div id="commentsModal" class="modal">
+        <div class="modal-content modal-fullscreen">
+            <div class="modal-header">
+                <button class="back-btn" onclick="closeModal('commentsModal')">‹</button>
+                <h2>💬 Комментарии</h2>
+            </div>
+            <div class="modal-body comments-body">
+                <div id="commentsList" class="comments-list"></div>
+                <div class="comments-input-container">
+                    <input type="text" id="commentInput" class="comment-input" placeholder="Написать комментарий..." maxlength="500">
+                    <button class="comment-send-btn" onclick="sendComment()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Confirm Dialog -->
+    <div id="confirmDialog" class="confirm-dialog">
+        <div class="confirm-overlay" onclick="closeConfirm()"></div>
+        <div class="confirm-content">
+            <h3 id="confirmTitle">Подтверждение</h3>
+            <p id="confirmText">Вы уверены?</p>
+            <div class="confirm-actions">
+                <button class="btn-secondary" onclick="closeConfirm()">Отмена</button>
+                <button class="btn-primary" id="confirmBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
